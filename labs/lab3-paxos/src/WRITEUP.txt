@@ -6,5 +6,5 @@ Partner 2 Name, NetID:
 Brief description of design:
 
 
-Hours spent on the lab: 
+Hours spent on the lab (a union of the hours would be preferred): 
 

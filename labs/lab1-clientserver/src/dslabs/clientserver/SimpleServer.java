@@ -3,6 +3,7 @@ package dslabs.clientserver;
 import dslabs.framework.Address;
 import dslabs.framework.Application;
 import dslabs.framework.Node;
+import dslabs.kvstore.KVStore;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
@@ -15,6 +16,7 @@ import lombok.ToString;
 @EqualsAndHashCode(callSuper = true)
 class SimpleServer extends Node {
     // Your code here...
+    private final KVStore app;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -23,6 +25,7 @@ class SimpleServer extends Node {
         super(address);
 
         // Your code here...
+        this.app = (KVStore) app;
     }
 
     @Override
@@ -35,5 +38,7 @@ class SimpleServer extends Node {
        -----------------------------------------------------------------------*/
     private void handleRequest(Request m, Address sender) {
         // Your code here...
+        Reply reply = new Reply(app.execute(m.command()), m.sequenceNum());
+        send(new Reply(reply.result(), reply.sequenceNum()), sender);
     }
 }

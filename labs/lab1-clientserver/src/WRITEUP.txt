@@ -1,6 +1,6 @@
 Lab 1 Writeup
 
-Name, NetID: 
+Name, NetID: Yitian Hao, yh255
 
 Brief description of design:
 

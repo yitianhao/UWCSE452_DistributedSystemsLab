@@ -66,7 +66,7 @@ public class KVStore implements Application {
     HashMap<String, String> kvstore = new HashMap<>();
 
     @Override
-    public synchronized KVStoreResult execute(Command command) {
+    public KVStoreResult execute(Command command) {
         if (command instanceof Get) {
             Get g = (Get) command;
             // Your code here...

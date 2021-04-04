@@ -1,11 +1,15 @@
 package dslabs.clientserver;
 
 import com.google.common.base.Objects;
+import dslabs.atmostonce.AMOCommand;
+import dslabs.atmostonce.AMOResult;
 import dslabs.framework.Address;
 import dslabs.framework.Client;
 import dslabs.framework.Command;
 import dslabs.framework.Node;
 import dslabs.framework.Result;
+import dslabs.kvstore.KVStore.SingleKeyCommand;
+import java.util.HashMap;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
 import lombok.ToString;
@@ -48,18 +52,18 @@ class SimpleClient extends Node implements Client {
     @Override
     public synchronized void sendCommand(Command command) {
         // Your code here...
-//        if (!(command instanceof Request)) {
-//            throw new InterruptedException();
-//        }
+        if (!(command instanceof SingleKeyCommand)) {
+            throw new IllegalArgumentException();
+        }
 
-        Request r = new Request(command, seqNum);
-        seqNum++;
+        AMOCommand amoCommand = new AMOCommand(command, this.address().toString(), seqNum);
 
-        request = r;
+        request = new Request(amoCommand);
         reply = null;
+        //System.out.println("in client: command = " + amoCommand.command().toString());
 
-        this.send(new Request(r.command(), r.sequenceNum()), serverAddress);
-        this.set(new ClientTimer(r), CLIENT_RETRY_MILLIS);
+        this.send(new Request(amoCommand), serverAddress);
+        this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
     }
 
     @Override
@@ -74,7 +78,8 @@ class SimpleClient extends Node implements Client {
         while (reply == null) {
             wait();
         }
-        return reply.result();
+        seqNum++;
+        return reply.result().result();
     }
 
     /* -------------------------------------------------------------------------
@@ -82,7 +87,7 @@ class SimpleClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void handleReply(Reply m, Address sender) {
         // Your code here...
-        if (m != null) {
+        if (m != null && m.result() != null && seqNum == m.result().sequenceNum()) {
             reply = m;
             notify();
         }
@@ -93,9 +98,10 @@ class SimpleClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void onClientTimer(ClientTimer t) {
         // Your code here...
-        if (Objects.equal(request, t.request()) && reply == null) {
-            this.send(new Request(request.command(), request.sequenceNum()), serverAddress);
-            this.set(new ClientTimer(request), CLIENT_RETRY_MILLIS);
+        if (Objects.equal(request.command().sequenceNum(), t.amoCommand().sequenceNum()) && reply == null) {
+            this.send(new Request(request.command()), serverAddress);
+            //System.out.println("extend timer on : " + t.amoCommand().toString());
+            this.set(t, CLIENT_RETRY_MILLIS);
         }
     }
 }

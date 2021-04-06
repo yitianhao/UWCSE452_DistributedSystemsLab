@@ -3,7 +3,23 @@ Lab 1 Writeup
 Name, NetID: Yitian Hao, yh255
 
 Brief description of design:
+- for the basic structure of the lab, I replicate it using lab0.
+- for classes like "Request", "Reply", "AMOCommand", "AMOResult", I followed what has been suggested from the spec.
+- for kvstore, I treat it as a wrapper of HashMap functions.
+- for at-least-once, I used the same semantics as lab0.
+- for at-most-once:
+  - previous design: store <"clientNum+SeqNumPerClient", Result> in a HashMap, which I learned from the lecture slide.
+                     But this won't pass the garbage collection test.
+  - current design: from the spec (one outstanding request at a time + won't sendCommand twice w/o hear from the first command),
+                    I decided to discard old RPCs: store <clientNum, <SeqNumPerClient, Result>> in a HashMap.
+                    So when command.seqNum <= the seqNum stored in the HashMap, I won't execute it, instead I will return
+                    the Result value previously stored;
+                    whenever I have an opportunity to execute the command, I will also update the HashMap.
 
+Hours spent on the lab: 16 hrs
 
-Hours spent on the lab: 
+Most time consuming parts:
+- understand and design at-least-once and at-most-once
+- how to only store the info needed, instead of all uid
+- dealing with model checker
 

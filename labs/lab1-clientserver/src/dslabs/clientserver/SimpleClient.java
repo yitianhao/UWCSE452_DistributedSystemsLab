@@ -58,14 +58,8 @@ class SimpleClient extends Node implements Client {
 
         AMOCommand amoCommand = new AMOCommand(command, this.address(), seqNum);
 
-        if (reply != null && reply.result().sequenceNum() == seqNum && reply.result().clientID() == this.address()) {
-            notify();
-            return;
-        }
-
         request = new Request(amoCommand);
         reply = null;
-        //System.out.println("send command: command = " + amoCommand.command().toString() + " | seq = " + seqNum);
 
         this.send(new Request(amoCommand), serverAddress);
         this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
@@ -83,8 +77,8 @@ class SimpleClient extends Node implements Client {
         while (reply == null) {
             wait();
         }
-        seqNum++;
 
+        seqNum++;
         return reply.result().result();
     }
 
@@ -93,11 +87,8 @@ class SimpleClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void handleReply(Reply m, Address sender) {
         // Your code here...
-        if (m != null && m.result() != null &&
-                seqNum == m.result().sequenceNum() /*&&
-                Objects.equal(sender, m.result().serverID())*/) {
+        if (m != null && m.result() != null && seqNum == m.result().sequenceNum()) {
             reply = m;
-            //System.out.println("received reply: reply = " + reply.result().toString() + " | seq = " + reply.result().sequenceNum());
             notify();
         }
     }

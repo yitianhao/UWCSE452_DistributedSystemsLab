@@ -6,6 +6,7 @@ import dslabs.framework.Command;
 import dslabs.framework.Result;
 import java.io.Serializable;
 import java.util.HashMap;
+import java.util.Objects;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NonNull;
@@ -20,20 +21,37 @@ public final class AMOApplication<T extends Application>
     @Getter @NonNull private final T application;
 
     // Your code here...
-    private static class Tuple<I, R> implements Serializable {
-        private I seqNum;
-        private R result;
+    private static class Tuple implements Serializable {
+        private Integer seqNum;
+        private Result result;
 
-        public Tuple(I seqNum, R result) {
+        public Tuple(Integer seqNum, Result result) {
             this.result = result;
             this.seqNum = seqNum;
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            Tuple tuple = (Tuple) o;
+            return seqNum.equals(tuple.seqNum) && result.equals(tuple.result);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(seqNum, result);
+        }
     }
-    private HashMap<Address, Tuple<Integer, Result>> bookkeeping = new HashMap<>();
+    private HashMap<Address, Tuple> bookkeeping = new HashMap<>();
     private Address serverAddress;
     public AMOApplication(T app, Address address) {
         application = app;
-        this.serverAddress = address;
+        // this.serverAddress = address;
     }
 
     @Override
@@ -45,16 +63,12 @@ public final class AMOApplication<T extends Application>
         AMOCommand amoCommand = (AMOCommand) command;
 
         // Your code here...
-        //String uid = amoCommand.clientID() + "#" + amoCommand.sequenceNum();
         if (alreadyExecuted(amoCommand)) {
-            // System.out.println("----duplicate seqNum = " + amoCommand.sequenceNum());
-            // bookkeeping.put(amoCommand.clientID(), null);
-            return new AMOResult(bookkeeping.get(amoCommand.clientID()).result, this.serverAddress, amoCommand.clientID(),amoCommand.sequenceNum());
+            return new AMOResult(bookkeeping.get(amoCommand.clientID()).result, amoCommand.sequenceNum());
         } else {
             Result res = application.execute(amoCommand.command());
-            bookkeeping.put(amoCommand.clientID(), new Tuple<>(amoCommand.sequenceNum(), res));
-            //System.out.println("did** : " + res.toString());
-            return new AMOResult(res, this.serverAddress, amoCommand.clientID(), amoCommand.sequenceNum());
+            bookkeeping.put(amoCommand.clientID(), new Tuple(amoCommand.sequenceNum(), res));
+            return new AMOResult(res, amoCommand.sequenceNum());
         }
     }
 

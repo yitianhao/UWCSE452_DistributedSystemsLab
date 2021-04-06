@@ -28,7 +28,7 @@ class SimpleServer extends Node {
         super(address);
 
         // Your code here...
-        this.application = new AMOApplication<>(app);
+        this.application = new AMOApplication(app, address);
     }
 
     @Override
@@ -41,8 +41,13 @@ class SimpleServer extends Node {
        -----------------------------------------------------------------------*/
     private void handleRequest(Request m, Address sender) {
         // Your code here...
-        //System.out.println("in server: command = " + m.command().toString());
-        AMOResult reply = application.execute(m.command());
-        send(new Reply(reply), sender);
+        //System.out.println("in server: command = " + m.command().toString())
+        if (m.command().readOnly()) {
+            Result result = application.executeReadOnly(m.command());
+            send(new Reply(new AMOResult(result, sender, m.command().clientID(), m.command().sequenceNum())), sender);
+        } else {
+            AMOResult result = application.execute(m.command());
+            send(new Reply(result), sender);
+        }
     }
 }

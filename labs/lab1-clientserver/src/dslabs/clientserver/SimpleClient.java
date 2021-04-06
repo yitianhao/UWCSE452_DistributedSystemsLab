@@ -56,11 +56,16 @@ class SimpleClient extends Node implements Client {
             throw new IllegalArgumentException();
         }
 
-        AMOCommand amoCommand = new AMOCommand(command, this.address().toString(), seqNum);
+        AMOCommand amoCommand = new AMOCommand(command, this.address(), seqNum);
+
+        if (reply != null && reply.result().sequenceNum() == seqNum && reply.result().clientID() == this.address()) {
+            notify();
+            return;
+        }
 
         request = new Request(amoCommand);
         reply = null;
-        //System.out.println("in client: command = " + amoCommand.command().toString());
+        //System.out.println("send command: command = " + amoCommand.command().toString() + " | seq = " + seqNum);
 
         this.send(new Request(amoCommand), serverAddress);
         this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
@@ -79,6 +84,7 @@ class SimpleClient extends Node implements Client {
             wait();
         }
         seqNum++;
+
         return reply.result().result();
     }
 
@@ -87,8 +93,11 @@ class SimpleClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void handleReply(Reply m, Address sender) {
         // Your code here...
-        if (m != null && m.result() != null && seqNum == m.result().sequenceNum()) {
+        if (m != null && m.result() != null &&
+                seqNum == m.result().sequenceNum() /*&&
+                Objects.equal(sender, m.result().serverID())*/) {
             reply = m;
+            //System.out.println("received reply: reply = " + reply.result().toString() + " | seq = " + reply.result().sequenceNum());
             notify();
         }
     }
@@ -98,9 +107,8 @@ class SimpleClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void onClientTimer(ClientTimer t) {
         // Your code here...
-        if (Objects.equal(request.command().sequenceNum(), t.amoCommand().sequenceNum()) && reply == null) {
+        if (seqNum == t.amoCommand().sequenceNum() && reply == null) {
             this.send(new Request(request.command()), serverAddress);
-            //System.out.println("extend timer on : " + t.amoCommand().toString());
             this.set(t, CLIENT_RETRY_MILLIS);
         }
     }

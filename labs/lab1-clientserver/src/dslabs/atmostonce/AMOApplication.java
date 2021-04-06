@@ -4,7 +4,7 @@ import dslabs.framework.Address;
 import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Result;
-import dslabs.kvstore.KVStore;
+import java.io.Serializable;
 import java.util.HashMap;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
@@ -20,9 +20,20 @@ public final class AMOApplication<T extends Application>
     @Getter @NonNull private final T application;
 
     // Your code here...
-    private HashMap<String, Result> bookkeeping = new HashMap<>();
+    private static class Tuple<I, R> implements Serializable {
+        private I seqNum;
+        private R result;
+
+        public Tuple(I seqNum, R result) {
+            this.result = result;
+            this.seqNum = seqNum;
+        }
+    }
+    private HashMap<Address, Tuple<Integer, Result>> bookkeeping = new HashMap<>();
+    private Address serverAddress;
     public AMOApplication(T app, Address address) {
         application = app;
+        this.serverAddress = address;
     }
 
     @Override
@@ -34,15 +45,16 @@ public final class AMOApplication<T extends Application>
         AMOCommand amoCommand = (AMOCommand) command;
 
         // Your code here...
-        String uid = amoCommand.clientID() + "#" + amoCommand.sequenceNum();
-        if (alreadyExecuted(uid)) {
-            //System.out.println("duplicate seqNum = " + amoCommand.sequenceNum());
-            return new AMOResult(bookkeeping.get(uid), amoCommand.clientID(), amoCommand.sequenceNum());
+        //String uid = amoCommand.clientID() + "#" + amoCommand.sequenceNum();
+        if (alreadyExecuted(amoCommand)) {
+            // System.out.println("----duplicate seqNum = " + amoCommand.sequenceNum());
+            // bookkeeping.put(amoCommand.clientID(), null);
+            return new AMOResult(bookkeeping.get(amoCommand.clientID()).result, this.serverAddress, amoCommand.clientID(),amoCommand.sequenceNum());
         } else {
             Result res = application.execute(amoCommand.command());
-            bookkeeping.put(uid, res);
+            bookkeeping.put(amoCommand.clientID(), new Tuple<>(amoCommand.sequenceNum(), res));
             //System.out.println("did** : " + res.toString());
-            return new AMOResult(res, amoCommand.clientID(), amoCommand.sequenceNum());
+            return new AMOResult(res, this.serverAddress, amoCommand.clientID(), amoCommand.sequenceNum());
         }
     }
 
@@ -58,8 +70,9 @@ public final class AMOApplication<T extends Application>
         return application.execute(command);
     }
 
-    public boolean alreadyExecuted(String uid) {
+    public boolean alreadyExecuted(AMOCommand command) {
         // Your code here...
-        return bookkeeping.containsKey(uid);
+        return bookkeeping.containsKey(command.clientID()) &&
+                bookkeeping.get(command.clientID()).seqNum >= command.sequenceNum();
     }
 }

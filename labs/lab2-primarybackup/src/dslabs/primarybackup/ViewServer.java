@@ -2,6 +2,9 @@ package dslabs.primarybackup;
 
 import dslabs.framework.Address;
 import dslabs.framework.Node;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
@@ -14,6 +17,11 @@ class ViewServer extends Node {
     private static final int INITIAL_VIEWNUM = 1;
 
     // Your code here...
+    private static View currentView;
+    private static HashSet<Address> idleServers;
+    private static HashSet<Address> secondMostRecentPingedServers;
+    private static HashSet<Address> mostRecentPingedServers;
+    private static int primaryViewNum;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -26,24 +34,62 @@ class ViewServer extends Node {
     public void init() {
         set(new PingCheckTimer(), PING_CHECK_MILLIS);
         // Your code here...
+        currentView = new View(STARTUP_VIEWNUM, null, null);
+        idleServers = new HashSet<>();
+        secondMostRecentPingedServers = new HashSet<>();
+        mostRecentPingedServers = new HashSet<>();
+        primaryViewNum = STARTUP_VIEWNUM;
     }
 
     /* -------------------------------------------------------------------------
         Message Handlers
        -----------------------------------------------------------------------*/
+    // A Ping lets the ViewServer know that the server is alive;
+    // informs the server of the current view;
+    // and informs the ViewServer of the most recent view that the server knows about.
     private void handlePing(Ping m, Address sender) {
         // Your code here...
+        // A. first start up
+        if (m.viewNum() == STARTUP_VIEWNUM && currentView.primary() == null) {
+            currentView = new View(INITIAL_VIEWNUM, sender, null);
+        // B. only until the primary from the current view acknowledges that it is operating in the current view,
+        // can the ViewServer change the current view
+        } else if (Objects.equals(sender, currentView.primary())) {
+            primaryViewNum = m.viewNum();
+            if (currentView.backup() == null && primaryViewNum == currentView.viewNum()) viewTransition("backup null");
+        } else {
+            if (!Objects.equals(sender, currentView.backup())) idleServers.add(sender);
+            //System.out.println(sender.toString());
+            //System.out.println(primaryAck);
+            if (currentView.backup() == null && primaryViewNum == currentView.viewNum()) viewTransition("backup null");
+        }
+        mostRecentPingedServers.add(sender);
+        send(new ViewReply(currentView), sender);
     }
 
     private void handleGetView(GetView m, Address sender) {
         // Your code here...
+        send(new ViewReply(currentView), sender);
     }
 
     /* -------------------------------------------------------------------------
         Timer Handlers
        -----------------------------------------------------------------------*/
-    private void onPingCheckTimer(PingCheckTimer t) {
+    private void onPingCheckTimer(PingCheckTimer t)
+            throws InterruptedException {
         // Your code here...
+        secondMostRecentPingedServers.removeIf(mostRecentPingedServers::contains);  // what left are dead
+        idleServers.removeIf(secondMostRecentPingedServers::contains);  // remove dead servers
+        // if primary or backup dead...
+        if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.primary())) {
+            viewTransition("primary fails");
+        }
+        if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.backup())) {
+            viewTransition("backup fails");
+        }
+        secondMostRecentPingedServers.clear();
+        secondMostRecentPingedServers.addAll(mostRecentPingedServers);
+        mostRecentPingedServers.clear();
         set(t, PING_CHECK_MILLIS);
     }
 
@@ -51,4 +97,30 @@ class ViewServer extends Node {
         Utils
        -----------------------------------------------------------------------*/
     // Your code here...
+
+    private void viewTransition(String msg) {
+
+            if (msg.equals("backup null") && !idleServers.isEmpty()) {
+                Address idleServer = idleServers.iterator().next();
+                currentView = new View(currentView.viewNum() + 1, currentView.primary(), idleServer);
+                // System.out.println("backup null: " +  currentView.primary().toString() + idleServer.toString());
+                idleServers.remove(idleServer);
+            } else if (msg.equals("primary fails")) {
+                if (idleServers.isEmpty()) {
+                    currentView = new View(currentView.viewNum() + 1, currentView.backup(), null);
+                } else {
+                    Address idleServer = idleServers.iterator().next();
+                    currentView = new View(currentView.viewNum() + 1, currentView.backup(), idleServer);
+                    idleServers.remove(idleServer);
+                }
+            } else if (msg.equals("backup fails")) {
+                if (idleServers.isEmpty()) {
+                    currentView = new View(currentView.viewNum() + 1, currentView.primary(), null);
+                } else {
+                    Address idleServer = idleServers.iterator().next();
+                    currentView = new View(currentView.viewNum() + 1, currentView.primary(), idleServer);
+                    idleServers.remove(idleServer);
+                }
+            }
+    }
 }

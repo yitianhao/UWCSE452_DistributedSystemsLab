@@ -1,7 +1,7 @@
 Lab 2 Writeup
 
-Partner 1 Name, NetID: 
-Partner 2 Name, NetID: 
+Partner 1 Name, NetID: Yitian Hao
+Partner 2 Name, NetID: Zheng Wang
 
 Brief description of design:
 

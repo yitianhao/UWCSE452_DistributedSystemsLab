@@ -59,8 +59,6 @@ class ViewServer extends Node {
             if (currentView.backup() == null && primaryViewNum == currentView.viewNum()) viewTransition("backup null");
         } else {
             if (!Objects.equals(sender, currentView.backup())) idleServers.add(sender);
-            //System.out.println(sender.toString());
-            //System.out.println(primaryAck);
             if (currentView.backup() == null && primaryViewNum == currentView.viewNum()) viewTransition("backup null");
         }
         mostRecentPingedServers.add(sender);
@@ -99,28 +97,26 @@ class ViewServer extends Node {
     // Your code here...
 
     private void viewTransition(String msg) {
-
-            if (msg.equals("backup null") && !idleServers.isEmpty()) {
+        if (msg.equals("backup null") && !idleServers.isEmpty()) {
+            Address idleServer = idleServers.iterator().next();
+            currentView = new View(currentView.viewNum() + 1, currentView.primary(), idleServer);
+            idleServers.remove(idleServer);
+        } else if (msg.equals("primary fails")) {
+            if (idleServers.isEmpty()) {
+                currentView = new View(currentView.viewNum() + 1, currentView.backup(), null);
+            } else {
+                Address idleServer = idleServers.iterator().next();
+                currentView = new View(currentView.viewNum() + 1, currentView.backup(), idleServer);
+                idleServers.remove(idleServer);
+            }
+        } else if (msg.equals("backup fails")) {
+            if (idleServers.isEmpty()) {
+                currentView = new View(currentView.viewNum() + 1, currentView.primary(), null);
+            } else {
                 Address idleServer = idleServers.iterator().next();
                 currentView = new View(currentView.viewNum() + 1, currentView.primary(), idleServer);
-                // System.out.println("backup null: " +  currentView.primary().toString() + idleServer.toString());
                 idleServers.remove(idleServer);
-            } else if (msg.equals("primary fails")) {
-                if (idleServers.isEmpty()) {
-                    currentView = new View(currentView.viewNum() + 1, currentView.backup(), null);
-                } else {
-                    Address idleServer = idleServers.iterator().next();
-                    currentView = new View(currentView.viewNum() + 1, currentView.backup(), idleServer);
-                    idleServers.remove(idleServer);
-                }
-            } else if (msg.equals("backup fails")) {
-                if (idleServers.isEmpty()) {
-                    currentView = new View(currentView.viewNum() + 1, currentView.primary(), null);
-                } else {
-                    Address idleServer = idleServers.iterator().next();
-                    currentView = new View(currentView.viewNum() + 1, currentView.primary(), idleServer);
-                    idleServers.remove(idleServer);
-                }
             }
+        }
     }
 }

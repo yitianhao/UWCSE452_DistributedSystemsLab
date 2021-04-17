@@ -5,6 +5,7 @@
 
 import argparse
 import os
+import platform
 import shutil
 import subprocess
 
@@ -19,14 +20,29 @@ SEARCH_CATEGORY = 'dslabs.framework.testing.junit.SearchTests'
 
 VIZ_DEBUGGER = 'dslabs.framework.testing.visualization.VizClient'
 
-RUNTIME_CLASSPATH = (
-    'jars/framework.jar:'
-    'jars/framework-deps.jar:'
-    'jars/grader.jar:'
-    'jars/grader-deps.jar:'
-    'out/src/:'
-    'out/tst/'
+TRACE_CHECKER = 'dslabs.framework.testing.search.CheckSavedTraces'
+
+BASE_COMMAND = (
+    'java',
+    '--add-opens', 'java.base/jdk.internal.reflect=ALL-UNNAMED',
+    '--add-opens', 'java.base/java.lang=ALL-UNNAMED',
+    '--add-opens', 'java.base/java.util=ALL-UNNAMED',
+    '--add-opens', 'java.base/java.util.concurrent.atomic=ALL-UNNAMED'
 )
+
+if platform.system() == 'Windows':
+    CP_SEP = ';'
+else:
+    CP_SEP = ':'
+
+RUNTIME_CLASSPATH = CP_SEP.join((
+    'jars/framework.jar',
+    'jars/framework-deps.jar',
+    'jars/grader.jar',
+    'jars/grader-deps.jar',
+    'out/src/',
+    'out/tst/'
+))
 
 def make():
     """Compile the source files, return True if successful."""
@@ -43,17 +59,12 @@ def make():
 def run_tests(lab, part=None, no_run=False, no_search=False,
               timers_disabled=False, log_level=None, single_threaded=False,
               start_viz=False, no_viz_server=False, do_checks=False,
-              test_num=None, assertions=False):
+              test_num=None, assertions=False, save_traces=False):
     """Run the specified tests."""
     if not make():
         return
 
-    command = ['java',
-               '--add-opens', 'java.base/jdk.internal.reflect=ALL-UNNAMED',
-               '--add-opens', 'java.base/java.lang=ALL-UNNAMED',
-               '--add-opens', 'java.base/java.util=ALL-UNNAMED',
-               '--add-opens',
-               'java.base/java.util.concurrent.atomic=ALL-UNNAMED']
+    command = list(BASE_COMMAND)
 
     if assertions:
         command.append('-ea')
@@ -78,6 +89,9 @@ def run_tests(lab, part=None, no_run=False, no_search=False,
 
     if do_checks:
         command.append('-DdoChecks=true')
+
+    if save_traces:
+        command.append('-DsaveTraces=true')
 
     command += [
         '-cp',
@@ -112,7 +126,7 @@ def run_viz_debugger(lab, args, no_viz_server=False):
     if not make():
         return
 
-    command = ['java']
+    command = list(BASE_COMMAND)
 
     if no_viz_server:
         command.append('-DnoVizServer=true')
@@ -129,11 +143,45 @@ def run_viz_debugger(lab, args, no_viz_server=False):
     subprocess.call(command)
 
 
+def check_traces(log_level=None, start_viz=False, no_viz_server=False,
+                 do_checks=False, assertions=False):
+    """Run the specified tests."""
+    if not make():
+        return
+
+    command = list(BASE_COMMAND)
+
+    if assertions:
+        command.append('-ea')
+
+    if log_level:
+        command.append('-DlogLevel=%s' % log_level)
+
+    if start_viz:
+        command.append('-DstartViz=true')
+
+    if no_viz_server:
+        command.append('-DnoVizServer=true')
+
+    if do_checks:
+        command.append('-DdoChecks=true')
+
+    command += [
+        '-cp',
+        RUNTIME_CLASSPATH,
+        RUNNER,
+        TRACE_CHECKER
+    ]
+
+    subprocess.call(command)
+
+
 def main():
     """Parse args and run tests."""
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-l', '--lab', type=int, nargs=None, required=True,
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-l', '--lab', type=int, nargs=None,
                         help="lab number for tests to run")
     parser.add_argument('-p', '--part', type=int, nargs='?', default=None,
                         help="part number for tests to run")
@@ -160,6 +208,12 @@ def main():
     parser.add_argument('--single-threaded', action='store_true',
                         help="run the tests using only a single thread")
 
+    group.add_argument('--check-traces', action='store_true',
+                       help="replay and recheck saved traces instead of "
+                            "running provided tests")
+    parser.add_argument('-s', '--save-traces', action='store_true',
+                        help="save traces after search test failure")
+
     parser.add_argument('-z', '--start-viz', action='store_true',
                         help="start the visualization on invariant violation")
 
@@ -179,7 +233,16 @@ def main():
     args = parser.parse_args()
 
     if args.debugger:
+        if args.check_traces:
+            parser.error("starting the debugger with --check-traces not "
+                         "currently supported")
         run_viz_debugger(args.lab, args.debugger, args.no_viz_server)
+    elif args.check_traces:
+        check_traces(log_level=args.log_level,
+                     start_viz=args.start_viz,
+                     no_viz_server=args.no_viz_server,
+                     do_checks=args.checks,
+                     assertions=args.assertions)
     else:
         run_tests(args.lab,
                   part=args.part,
@@ -192,7 +255,8 @@ def main():
                   no_viz_server=args.no_viz_server,
                   do_checks=args.checks,
                   test_num=args.test_num,
-                  assertions=args.assertions)
+                  assertions=args.assertions,
+                  save_traces=args.save_traces)
 
 
 if __name__ == '__main__':

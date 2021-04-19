@@ -2,6 +2,7 @@ package dslabs.primarybackup;
 
 import dslabs.atmostonce.AMOCommand;
 import dslabs.atmostonce.AMOResult;
+import dslabs.framework.Application;
 import dslabs.framework.Message;
 import lombok.Data;
 
@@ -38,3 +39,7 @@ class Reply implements Message {
 }
 
 // Your code here...
+@Data
+class TransferredState implements Message {
+    private final Application application;
+}

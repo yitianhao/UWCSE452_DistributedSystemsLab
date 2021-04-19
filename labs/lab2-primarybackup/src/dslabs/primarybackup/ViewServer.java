@@ -17,11 +17,11 @@ class ViewServer extends Node {
     private static final int INITIAL_VIEWNUM = 1;
 
     // Your code here...
-    private static View currentView;
-    private static HashSet<Address> idleServers;
-    private static HashSet<Address> secondMostRecentPingedServers;
-    private static HashSet<Address> mostRecentPingedServers;
-    private static int primaryViewNum;
+    private View currentView;
+    private HashSet<Address> idleServers;
+    private HashSet<Address> secondMostRecentPingedServers;
+    private HashSet<Address> mostRecentPingedServers;
+    private int primaryViewNum;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -39,7 +39,7 @@ class ViewServer extends Node {
         secondMostRecentPingedServers = new HashSet<>();
         mostRecentPingedServers = new HashSet<>();
         primaryViewNum = STARTUP_VIEWNUM;
-        System.out.println("viewserver init called | current view" + currentView.toString());
+        //System.out.println("viewserver init called | current view" + currentView.toString());
     }
 
     /* -------------------------------------------------------------------------
@@ -51,12 +51,10 @@ class ViewServer extends Node {
     private void handlePing(Ping m, Address sender) {
         // Your code here...
         // A. first start up
-        System.out.println("viewserver: entered handlePing");
         if (m.viewNum() == STARTUP_VIEWNUM && currentView.primary() == null) {
             currentView = new View(INITIAL_VIEWNUM, sender, null);
         // B. only until the primary from the current view acknowledges that it is operating in the current view,
         // can the ViewServer change the current view
-            System.out.println("first server started");
         } else if (Objects.equals(sender, currentView.primary())) {
             primaryViewNum = m.viewNum();
             if (currentView.backup() == null && primaryViewNum == currentView.viewNum()) viewTransition("backup null");
@@ -70,7 +68,6 @@ class ViewServer extends Node {
 
     private void handleGetView(GetView m, Address sender) {
         // Your code here...
-        System.out.println("viewserver reply with " + currentView.toString());
         send(new ViewReply(currentView), sender);
     }
 
@@ -79,6 +76,7 @@ class ViewServer extends Node {
        -----------------------------------------------------------------------*/
     private void onPingCheckTimer(PingCheckTimer t)
             throws InterruptedException {
+        //System.out.println("viewserver: onPingCheckTimer");
         // Your code here...
         secondMostRecentPingedServers.removeIf(mostRecentPingedServers::contains);  // what left are dead
         idleServers.removeIf(secondMostRecentPingedServers::contains);  // remove dead servers

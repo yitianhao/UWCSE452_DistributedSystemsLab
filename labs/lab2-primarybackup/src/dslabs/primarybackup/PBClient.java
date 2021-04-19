@@ -6,11 +6,14 @@ import dslabs.framework.Client;
 import dslabs.framework.Command;
 import dslabs.framework.Node;
 import dslabs.framework.Result;
+import dslabs.framework.Timer;
+import dslabs.kvstore.KVStore.SingleKeyCommand;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
 import lombok.ToString;
 
 import static dslabs.primarybackup.ClientTimer.CLIENT_RETRY_MILLIS;
+import static dslabs.primarybackup.PingTimer.PING_MILLIS;
 
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
@@ -31,10 +34,13 @@ class PBClient extends Node implements Client {
         this.viewServer = viewServer;
     }
 
+    @SneakyThrows
     @Override
     public synchronized void init() {
         // Your code here...
         this.send(new GetView(), viewServer);
+        AMOCommand amoCommand = new AMOCommand(null, address(), seqNum); // need improvement
+        this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
     }
 
     /* -------------------------------------------------------------------------
@@ -44,21 +50,19 @@ class PBClient extends Node implements Client {
     @Override
     public synchronized void sendCommand(Command command) {
         // Your code here...
-//        if (!(command instanceof SingleKeyCommand)) {
-//            throw new IllegalArgumentException();
-//        }
+        if (!(command instanceof SingleKeyCommand)) {
+            throw new IllegalArgumentException();
+        }
 
         AMOCommand amoCommand = new AMOCommand(command, this.address(), seqNum);
 
         request = new Request(amoCommand);
         reply = null;
 
-        while (currentView == null) {
-            wait();
+        if (currentView != null && currentView.primary() != null) {
+            this.send(new Request(amoCommand), currentView.primary());
             this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
         }
-        this.send(new Request(amoCommand), currentView.primary());
-        this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
     }
 
     @Override
@@ -91,9 +95,14 @@ class PBClient extends Node implements Client {
 
     private synchronized void handleViewReply(ViewReply m, Address sender) {
         // Your code here...
-        if (currentView != null) {
-            currentView = m.view();
-            notify();
+        if (m != null && m.view() != null) {
+            if (currentView != null) {
+                if (currentView.viewNum() <= m.view().viewNum()) {
+                    currentView = m.view();
+                }
+            } else {
+                currentView = m.view();
+            }
         }
     }
 
@@ -104,11 +113,11 @@ class PBClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void onClientTimer(ClientTimer t) {
         // Your code here...
-        if (seqNum == t.amoCommand().sequenceNum() && reply == null) {
-            this.send(new Request(request.command()), currentView.primary());
-            this.set(t, CLIENT_RETRY_MILLIS);
-        } else if (currentView == null) {
+        if (currentView == null || currentView.primary() == null) {
             this.send(new GetView(), viewServer);
+            this.set(t, CLIENT_RETRY_MILLIS);
+        } else if (seqNum == t.amoCommand().sequenceNum() && reply == null) {
+            this.send(new Request(request.command()), currentView.primary());
             this.set(t, CLIENT_RETRY_MILLIS);
         }
         // the client should not talk to the ViewServer

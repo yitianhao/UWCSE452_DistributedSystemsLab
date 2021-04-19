@@ -23,3 +23,9 @@ final class ClientTimer implements Timer {
 }
 
 // Your code here...
+//final class StateTransferTimer()
+@Data
+final class ForwardRequestTimer implements Timer {
+    static final int FORWARD_RETRY_MILLIS = 100;
+    private final AMOCommand amoCommand;
+}

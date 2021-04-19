@@ -81,8 +81,7 @@ class ViewServer extends Node {
         // if primary or backup dead...
         if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.primary())) {
             viewTransition("primary fails");
-        }
-        if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.backup())) {
+        }else if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.backup())) {
             viewTransition("backup fails");
         }
         secondMostRecentPingedServers.clear();
@@ -103,7 +102,11 @@ class ViewServer extends Node {
             idleServers.remove(idleServer);
         } else if (msg.equals("primary fails")) {
             if (idleServers.isEmpty()) {
-                currentView = new View(currentView.viewNum() + 1, currentView.backup(), null);
+                // what is backup is null?
+                // the ViewServer is forced to stick with current view, otherwise we would lose the work we've done so far
+                if (currentView.backup() != null) {
+                    currentView = new View(currentView.viewNum() + 1, currentView.backup(), null);
+                }
             } else {
                 Address idleServer = idleServers.iterator().next();
                 currentView = new View(currentView.viewNum() + 1, currentView.backup(), idleServer);

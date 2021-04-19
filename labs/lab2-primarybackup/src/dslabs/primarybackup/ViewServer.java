@@ -39,6 +39,7 @@ class ViewServer extends Node {
         secondMostRecentPingedServers = new HashSet<>();
         mostRecentPingedServers = new HashSet<>();
         primaryViewNum = STARTUP_VIEWNUM;
+        System.out.println("viewserver init called | current view" + currentView.toString());
     }
 
     /* -------------------------------------------------------------------------
@@ -50,10 +51,12 @@ class ViewServer extends Node {
     private void handlePing(Ping m, Address sender) {
         // Your code here...
         // A. first start up
+        System.out.println("viewserver: entered handlePing");
         if (m.viewNum() == STARTUP_VIEWNUM && currentView.primary() == null) {
             currentView = new View(INITIAL_VIEWNUM, sender, null);
         // B. only until the primary from the current view acknowledges that it is operating in the current view,
         // can the ViewServer change the current view
+            System.out.println("first server started");
         } else if (Objects.equals(sender, currentView.primary())) {
             primaryViewNum = m.viewNum();
             if (currentView.backup() == null && primaryViewNum == currentView.viewNum()) viewTransition("backup null");
@@ -67,6 +70,7 @@ class ViewServer extends Node {
 
     private void handleGetView(GetView m, Address sender) {
         // Your code here...
+        System.out.println("viewserver reply with " + currentView.toString());
         send(new ViewReply(currentView), sender);
     }
 

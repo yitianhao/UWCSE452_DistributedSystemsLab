@@ -35,3 +35,13 @@ final class ForwardedRequestTimer implements Timer {
 final class TransferredStateTimer implements Timer {
     static final int TRANSFERRED_RETRY_MILLIS = 100;
 }
+
+@Data
+final class GetViewTimer implements Timer {
+    static final int GET_VIEW_RETRY_MILLIS = 100;
+}
+
+@Data
+final class PrimarySeemsDeadTimer implements Timer {
+    static final int PRIMARY_SEEMS_DEAD_MILLIS = 5000;
+}

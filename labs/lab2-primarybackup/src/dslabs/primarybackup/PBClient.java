@@ -14,6 +14,7 @@ import lombok.ToString;
 
 import static dslabs.primarybackup.ClientTimer.CLIENT_RETRY_MILLIS;
 import static dslabs.primarybackup.PingTimer.PING_MILLIS;
+import static dslabs.primarybackup.PrimarySeemsDeadTimer.PRIMARY_SEEMS_DEAD_MILLIS;
 
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
@@ -25,6 +26,7 @@ class PBClient extends Node implements Client {
     private Reply reply;
     private int seqNum = 0;
     private View currentView;
+    private boolean viewRelied;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -62,6 +64,7 @@ class PBClient extends Node implements Client {
         if (currentView != null && currentView.primary() != null) {
             this.send(new Request(amoCommand), currentView.primary());
             this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
+            this.set(new PrimarySeemsDeadTimer(), PRIMARY_SEEMS_DEAD_MILLIS);
         }
     }
 
@@ -97,12 +100,13 @@ class PBClient extends Node implements Client {
         // Your code here...
         if (m != null && m.view() != null) {
             if (currentView != null) {
-                if (currentView.viewNum() <= m.view().viewNum()) {
+                if (currentView.viewNum() < m.view().viewNum()) {
                     currentView = m.view();
                 }
             } else {
                 currentView = m.view();
             }
+            viewRelied = true;
         }
     }
 
@@ -113,7 +117,7 @@ class PBClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void onClientTimer(ClientTimer t) {
         // Your code here...
-        if (currentView == null || currentView.primary() == null) {
+        if (currentView == null || currentView.primary() == null || !viewRelied) {
             this.send(new GetView(), viewServer);
             this.set(t, CLIENT_RETRY_MILLIS);
         } else if (seqNum == t.amoCommand().sequenceNum() && reply == null) {
@@ -122,5 +126,12 @@ class PBClient extends Node implements Client {
         }
         // the client should not talk to the ViewServer
         // when the current primary seems to be dead (i.e., on ClientTimer)???
+    }
+
+    private synchronized void onPrimarySeemsDeadTimer(PrimarySeemsDeadTimer t) {
+        viewRelied = false;
+        this.send(new GetView(), viewServer);
+        AMOCommand amoCommand = new AMOCommand(null, address(), seqNum); // need improvement
+        this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
     }
 }

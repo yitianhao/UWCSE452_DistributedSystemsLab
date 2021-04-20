@@ -26,6 +26,7 @@ class PBServer extends Node {
     private AMOApplication<Application> application;
     //private View viewServerView;
     private View myView;
+    private View oldView;
     private BackupAck backupAck;
     private boolean stateTransferDone;
 
@@ -71,7 +72,7 @@ class PBServer extends Node {
 
     private void handleViewReply(ViewReply m, Address sender) {
         // Your code here...
-        View oldView = myView;
+        oldView = myView;
         myView = m.view();
         if (Objects.equals(myView.primary(), address())
                 && myView.backup() != null && !Objects.equals(oldView.backup(), myView.backup())) {
@@ -116,14 +117,16 @@ class PBServer extends Node {
 
     // Your code here...
     private void onForwardedRequestTimer(ForwardedRequestTimer t) {
-        if (backupAck == null) {
+        if (backupAck == null && Objects.equals(myView.primary(), address()) && myView.backup() != null) {
             this.send(new ForwardedRequest(t.amoCommand(), t.client()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);
         }
     }
 
     private void onTransferredStateTimer(TransferredStateTimer t) {
-        if (!stateTransferDone) {
+        if (!stateTransferDone  &&
+                Objects.equals(myView.primary(), address())
+                && myView.backup() != null && !Objects.equals(oldView.backup(), myView.backup())) {
             this.send(new TransferredState(application), myView.backup());
             this.set(t, TRANSFERRED_RETRY_MILLIS);
         }

@@ -1127,7 +1127,7 @@ public class PaxosTest extends BaseJUnitTest {
     @Test(timeout = 40 * 1000)
     @PrettyTestName("Paxos runs in singleton group")
     @Category({RunTests.class, SearchTests.class})
-    @TestPointValue(0)
+    @TestPointValue(10)
     public void test26SingletonPaxos() throws InterruptedException {
         // First, do basic run-time tests to validate correctness
         setupStates(1);

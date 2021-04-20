@@ -12,8 +12,9 @@ import lombok.SneakyThrows;
 import lombok.ToString;
 
 import static dslabs.primarybackup.ClientTimer.CLIENT_RETRY_MILLIS;
-import static dslabs.primarybackup.ForwardRequestTimer.FORWARD_RETRY_MILLIS;
+import static dslabs.primarybackup.ForwardedRequestTimer.FORWARDED_RETRY_MILLIS;
 import static dslabs.primarybackup.PingTimer.PING_MILLIS;
+import static dslabs.primarybackup.TransferredStateTimer.TRANSFERRED_RETRY_MILLIS;
 import static dslabs.primarybackup.ViewServer.STARTUP_VIEWNUM;
 
 @ToString(callSuper = true)
@@ -25,6 +26,8 @@ class PBServer extends Node {
     private AMOApplication<Application> application;
     //private View viewServerView;
     private View myView;
+    private BackupAck backupAck;
+    private boolean stateTransferDone;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -52,31 +55,54 @@ class PBServer extends Node {
        -----------------------------------------------------------------------*/
     private void handleRequest(Request m, Address sender) {
         // Your code here...
-//        if (!Objects.equals(sender, myView.primary())) { // send by client
-//            forwardToBackup(m.command());
-//            AMOResult result = application.execute(m.command());
-//            send(new Reply(result), sender);
-//        } else {
-            AMOResult result = application.execute(m.command());
-            send(new Reply(result), sender);
-        // }
+        if (Objects.equals(myView.primary(), address())) {
+            if (myView.backup() != null) {
+                backupAck = null;
+                send(new ForwardedRequest(m.command(), sender), myView.backup());
+                set(new ForwardedRequestTimer(m.command(), sender), FORWARDED_RETRY_MILLIS);
+            } else {
+                AMOResult result = application.execute(m.command());
+                send(new Reply(result), sender);
+            }
+        } else {
+            // do nothing or error message
+        }
     }
 
     private void handleViewReply(ViewReply m, Address sender) {
         // Your code here...
+        View oldView = myView;
         myView = m.view();
+        if (Objects.equals(myView.primary(), address())
+                && myView.backup() != null && !Objects.equals(oldView.backup(), myView.backup())) {
+            send(new TransferredState(application), myView.backup());
+            set(new TransferredStateTimer(), TRANSFERRED_RETRY_MILLIS);
+        }
     }
 
     // Your code here...
-    private void handleTransferredState(TransferredState m, Address sender) {
-        this.application = (AMOApplication<Application>) m.application();
+    private void handleForwardedRequest(ForwardedRequest m, Address sender) {
+        if (Objects.equals(myView.backup(), address())) {
+            AMOResult result = application.execute(m.command());
+            send(new BackupAck(m.command(), m.client()), sender);
+        }
     }
 
-    private synchronized void handleReply(Reply m, Address sender) {
-        // Your code here...
-        if (m != null && m.result() != null) {
-
+    private void handleBackupAck(BackupAck m, Address sender) {
+        if (Objects.equals(myView.primary(), address())) {
+            backupAck = m;
+            AMOResult result = application.execute(m.command());
+            send(new Reply(result), m.client());
         }
+    }
+
+    private void handleTransferredState(TransferredState m, Address sender) {
+        this.application = (AMOApplication<Application>) m.application();
+        send(new StateTransferAck(), sender);
+    }
+
+    private void handleStateTransferAck(StateTransferAck m, Address sender) {
+        stateTransferDone = true;
     }
 
     /* -------------------------------------------------------------------------
@@ -89,17 +115,23 @@ class PBServer extends Node {
     }
 
     // Your code here...
-    private void onForwardRequestTimer(ForwardRequestTimer t) {
-        this.send(new Request(t.amoCommand()), myView.backup());
-        this.set(t, FORWARD_RETRY_MILLIS);
+    private void onForwardedRequestTimer(ForwardedRequestTimer t) {
+        if (backupAck == null) {
+            this.send(new ForwardedRequest(t.amoCommand(), t.client()), myView.backup());
+            this.set(t, FORWARDED_RETRY_MILLIS);
+        }
+    }
+
+    private void onTransferredStateTimer(TransferredStateTimer t) {
+        if (!stateTransferDone) {
+            this.send(new TransferredState(application), myView.backup());
+            this.set(t, TRANSFERRED_RETRY_MILLIS);
+        }
     }
 
     /* -------------------------------------------------------------------------
         Utils
        -----------------------------------------------------------------------*/
     // Your code here...
-    private void forwardToBackup(AMOCommand amoCommand) {
-        this.send(new Request(amoCommand), myView.backup());
-        this.set(new ForwardRequestTimer(amoCommand), FORWARD_RETRY_MILLIS);
-    }
+
 }

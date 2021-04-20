@@ -5,6 +5,15 @@ Partner 2 Name, NetID: Zheng Wang
 
 Brief description of design:
 
+primary
+  send to backup, wait, then do things, then reply client
+  no back, do things then reply
+
+Backup
+  check if forwarded command, doing things, reply to primary
+
+
+
 
 Union of hours spent on the lab:
 Total time spent on the lab:

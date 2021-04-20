@@ -1,6 +1,7 @@
 package dslabs.primarybackup;
 
 import dslabs.atmostonce.AMOCommand;
+import dslabs.framework.Address;
 import dslabs.framework.Timer;
 import lombok.Data;
 
@@ -23,9 +24,14 @@ final class ClientTimer implements Timer {
 }
 
 // Your code here...
-//final class StateTransferTimer()
 @Data
-final class ForwardRequestTimer implements Timer {
-    static final int FORWARD_RETRY_MILLIS = 100;
+final class ForwardedRequestTimer implements Timer {
+    static final int FORWARDED_RETRY_MILLIS = 100;
     private final AMOCommand amoCommand;
+    private final Address client;
+}
+
+@Data
+final class TransferredStateTimer implements Timer {
+    static final int TRANSFERRED_RETRY_MILLIS = 100;
 }

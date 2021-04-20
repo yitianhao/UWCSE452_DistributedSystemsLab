@@ -2,6 +2,7 @@ package dslabs.primarybackup;
 
 import dslabs.atmostonce.AMOCommand;
 import dslabs.atmostonce.AMOResult;
+import dslabs.framework.Address;
 import dslabs.framework.Application;
 import dslabs.framework.Message;
 import lombok.Data;
@@ -39,7 +40,24 @@ class Reply implements Message {
 }
 
 // Your code here...
+
+@Data
+class ForwardedRequest implements Message {
+    private final AMOCommand command;
+    private final Address client;
+}
+
+@Data
+class BackupAck implements Message {
+    private final AMOCommand command;
+    private final Address client;
+}
+
 @Data
 class TransferredState implements Message {
     private final Application application;
+}
+
+@Data
+class StateTransferAck implements Message {
 }

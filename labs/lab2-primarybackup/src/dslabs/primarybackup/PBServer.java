@@ -26,9 +26,10 @@ class PBServer extends Node {
     private AMOApplication<Application> application;
     //private View viewServerView;
     private View myView;
-    private View oldView;
     private BackupAck backupAck;
+    private boolean backupAckStarted;
     private boolean stateTransferDone;
+    private boolean stateTransferStarted;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -55,9 +56,12 @@ class PBServer extends Node {
        -----------------------------------------------------------------------*/
     private void handleRequest(Request m, Address sender) {
         // Your code here...
-        if (Objects.equals(myView.primary(), address())) {
+        if (Objects.equals(myView.primary(), address())
+                && (stateTransferDone || !stateTransferStarted)
+                && (backupAck != null || !backupAckStarted)) {
             if (myView.backup() != null) {
                 backupAck = null;
+                backupAckStarted = true;
                 send(new ForwardedRequest(m.command(), sender), myView.backup());
                 set(new ForwardedRequestTimer(m.command(), sender), FORWARDED_RETRY_MILLIS);
             } else {
@@ -65,29 +69,31 @@ class PBServer extends Node {
                 send(new Reply(result), sender);
             }
         } else {
-            // do nothing or error message
+            // do nothing or error messageSSystem.out.println("---");
         }
     }
 
     private void handleViewReply(ViewReply m, Address sender) {
         // Your code here...
-        //if (stateTransferDone && backupAck != null) {
-            oldView = myView;
+        if (myView.viewNum() >= m.view().viewNum()) {
+
+        } else {
             myView = m.view();
             if (Objects.equals(myView.primary(), address()) &&
-                    myView.backup() != null &&
-                    !Objects.equals(oldView.backup(), myView.backup())) {
+                    myView.backup() != null) {
                 stateTransferDone = false;
+                stateTransferStarted = true;
                 send(new TransferredState(application), myView.backup());
                 set(new TransferredStateTimer(), TRANSFERRED_RETRY_MILLIS);
             }
-        //}
+        }
     }
 
     // Your code here...
     private void handleForwardedRequest(ForwardedRequest m, Address sender) {
         if (Objects.equals(myView.backup(), address())) {
             backupAck = null;
+            backupAckStarted = true;
             AMOResult result = application.execute(m.command());
             send(new BackupAck(m.command(), m.client()), sender);
         }
@@ -96,6 +102,7 @@ class PBServer extends Node {
     private void handleBackupAck(BackupAck m, Address sender) {
         if (Objects.equals(myView.primary(), address())) {
             backupAck = m;
+            backupAckStarted = false;
             AMOResult result = application.execute(m.command());
             send(new Reply(result), m.client());
         }
@@ -103,12 +110,13 @@ class PBServer extends Node {
 
     private void handleTransferredState(TransferredState m, Address sender) {
         this.application = (AMOApplication<Application>) m.application();
-        backupAck = null;
+        stateTransferDone = false;
         send(new StateTransferAck(), sender);
     }
 
     private void handleStateTransferAck(StateTransferAck m, Address sender) {
         stateTransferDone = true;
+        stateTransferStarted = false;
     }
 
     /* -------------------------------------------------------------------------
@@ -132,7 +140,7 @@ class PBServer extends Node {
     private void onTransferredStateTimer(TransferredStateTimer t) {
         if (!stateTransferDone  &&
                 Objects.equals(myView.primary(), address())
-                && myView.backup() != null && !Objects.equals(oldView.backup(), myView.backup())) {
+                && myView.backup() != null) {
             stateTransferDone = false;
             this.send(new TransferredState(application), myView.backup());
             this.set(t, TRANSFERRED_RETRY_MILLIS);

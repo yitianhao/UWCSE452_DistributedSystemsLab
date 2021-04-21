@@ -26,14 +26,14 @@ final class ClientTimer implements Timer {
 // Your code here...
 @Data
 final class ForwardedRequestTimer implements Timer {
-    static final int FORWARDED_RETRY_MILLIS = 50;
+    static final int FORWARDED_RETRY_MILLIS = 25;
     private final AMOCommand amoCommand;
     private final Address client;
 }
 
 @Data
 final class TransferredStateTimer implements Timer {
-    static final int TRANSFERRED_RETRY_MILLIS = 50;
+    static final int TRANSFERRED_RETRY_MILLIS = 25;
 }
 
 @Data

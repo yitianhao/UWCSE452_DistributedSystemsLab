@@ -81,10 +81,11 @@ class ViewServer extends Node {
         secondMostRecentPingedServers.removeIf(mostRecentPingedServers::contains);  // what left are dead
         idleServers.removeIf(secondMostRecentPingedServers::contains);  // remove dead servers
         // if primary or backup dead...
-        if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.primary())) {
-            viewTransition("primary fails");
-        }else if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.backup())) {
+
+        if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.backup())) {
             viewTransition("backup fails");
+        } else if (primaryViewNum == currentView.viewNum() && secondMostRecentPingedServers.contains(currentView.primary())) {
+            viewTransition("primary fails");
         }
         secondMostRecentPingedServers.clear();
         secondMostRecentPingedServers.addAll(mostRecentPingedServers);

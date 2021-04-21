@@ -56,6 +56,7 @@ class BackupAck implements Message {
 @Data
 class TransferredState implements Message {
     private final Application application;
+    private final View view;
 }
 
 @Data

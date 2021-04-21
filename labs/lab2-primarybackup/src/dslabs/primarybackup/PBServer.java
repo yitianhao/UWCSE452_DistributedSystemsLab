@@ -24,7 +24,7 @@ class PBServer extends Node {
 
     // Your code here...
     private AMOApplication<Application> application;
-    //private View viewServerView;
+    private View viewServerView;
     private View myView;
     private BackupAck backupAck;
     private boolean backupAckStarted;
@@ -78,13 +78,17 @@ class PBServer extends Node {
         if (myView.viewNum() >= m.view().viewNum()) {
 
         } else {
-            myView = m.view();
-            if (Objects.equals(myView.primary(), address()) &&
-                    myView.backup() != null) {
-                stateTransferDone = false;
-                stateTransferStarted = true;
-                send(new TransferredState(application), myView.backup());
-                set(new TransferredStateTimer(), TRANSFERRED_RETRY_MILLIS);
+            if (stateTransferDone || !stateTransferStarted) {
+                viewServerView = m.view();
+                if (Objects.equals(m.view().primary(), address()) /*&& Objects.equals(myView.primary(), address())*/
+                        && m.view().backup() != null) {
+                    stateTransferDone = false;
+                    stateTransferStarted = true;
+                    send(new TransferredState(application, viewServerView), m.view().backup());
+                    set(new TransferredStateTimer(), TRANSFERRED_RETRY_MILLIS);
+                } else {
+                    myView = m.view();
+                }
             }
         }
     }
@@ -93,7 +97,7 @@ class PBServer extends Node {
     private void handleForwardedRequest(ForwardedRequest m, Address sender) {
         if (Objects.equals(myView.backup(), address())) {
             backupAck = null;
-            backupAckStarted = true;
+            //backupAckStarted = true;
             AMOResult result = application.execute(m.command());
             send(new BackupAck(m.command(), m.client()), sender);
         }
@@ -109,14 +113,21 @@ class PBServer extends Node {
     }
 
     private void handleTransferredState(TransferredState m, Address sender) {
-        this.application = (AMOApplication<Application>) m.application();
-        stateTransferDone = false;
-        send(new StateTransferAck(), sender);
+        if (Objects.equals(m.view().backup(), address()) && !Objects.equals(myView.primary(), address())) {
+            this.application = (AMOApplication<Application>) m.application();
+            myView = m.view();
+            send(new StateTransferAck(), sender);
+        }
     }
 
     private void handleStateTransferAck(StateTransferAck m, Address sender) {
-        stateTransferDone = true;
-        stateTransferStarted = false;
+        if (stateTransferStarted && !stateTransferDone &&
+                Objects.equals(myView.primary(), address())) {
+            stateTransferDone = true;
+            stateTransferStarted = false;
+            myView = viewServerView;
+        }
+
     }
 
     /* -------------------------------------------------------------------------
@@ -130,7 +141,8 @@ class PBServer extends Node {
 
     // Your code here...
     private void onForwardedRequestTimer(ForwardedRequestTimer t) {
-        if (backupAck == null && Objects.equals(myView.primary(), address()) && myView.backup() != null) {
+        if (backupAckStarted && backupAck == null && Objects.equals(myView.primary(), address())
+                && myView.backup() != null ) {
             backupAck = null;
             this.send(new ForwardedRequest(t.amoCommand(), t.client()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);
@@ -138,11 +150,11 @@ class PBServer extends Node {
     }
 
     private void onTransferredStateTimer(TransferredStateTimer t) {
-        if (!stateTransferDone  &&
+        if (stateTransferStarted && !stateTransferDone  &&
                 Objects.equals(myView.primary(), address())
                 && myView.backup() != null) {
             stateTransferDone = false;
-            this.send(new TransferredState(application), myView.backup());
+            this.send(new TransferredState(application, viewServerView), myView.backup());
             this.set(t, TRANSFERRED_RETRY_MILLIS);
         }
     }

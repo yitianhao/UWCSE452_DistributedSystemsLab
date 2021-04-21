@@ -290,6 +290,7 @@ public abstract class KVStoreWorkload extends Workload {
                             }
 
                             if (!(r instanceof AppendResult)) {
+                                System.out.println("not r instanceof AppendResult");
                                 return false;
                             }
 
@@ -298,6 +299,7 @@ public abstract class KVStoreWorkload extends Workload {
 
                             if (!appendResult.value()
                                              .endsWith(append.value())) {
+                                System.out.println("not appendResult.value().endsWith(append.value()");
                                 return false;
                             }
 
@@ -313,6 +315,7 @@ public abstract class KVStoreWorkload extends Workload {
                                        .startsWith(allResults.get(i)) ||
                                 allResults.get(i + 1)
                                           .equals(allResults.get(i))) {
+                            System.out.println("not Make sure each entry in allResults is a prefix of the next");
                             return false;
                         }
                     }

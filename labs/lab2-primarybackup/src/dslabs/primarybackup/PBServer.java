@@ -40,7 +40,6 @@ class PBServer extends Node {
         // Your code here...
         this.application = new AMOApplication(app);
         myView = new View(STARTUP_VIEWNUM, null, null);
-        //viewServerView = new View(STARTUP_VIEWNUM, null, null);
     }
 
     @SneakyThrows
@@ -72,18 +71,23 @@ class PBServer extends Node {
 
     private void handleViewReply(ViewReply m, Address sender) {
         // Your code here...
-        oldView = myView;
-        myView = m.view();
-        if (Objects.equals(myView.primary(), address())
-                && myView.backup() != null && !Objects.equals(oldView.backup(), myView.backup())) {
-            send(new TransferredState(application), myView.backup());
-            set(new TransferredStateTimer(), TRANSFERRED_RETRY_MILLIS);
-        }
+        //if (stateTransferDone && backupAck != null) {
+            oldView = myView;
+            myView = m.view();
+            if (Objects.equals(myView.primary(), address()) &&
+                    myView.backup() != null &&
+                    !Objects.equals(oldView.backup(), myView.backup())) {
+                stateTransferDone = false;
+                send(new TransferredState(application), myView.backup());
+                set(new TransferredStateTimer(), TRANSFERRED_RETRY_MILLIS);
+            }
+        //}
     }
 
     // Your code here...
     private void handleForwardedRequest(ForwardedRequest m, Address sender) {
         if (Objects.equals(myView.backup(), address())) {
+            backupAck = null;
             AMOResult result = application.execute(m.command());
             send(new BackupAck(m.command(), m.client()), sender);
         }
@@ -99,6 +103,7 @@ class PBServer extends Node {
 
     private void handleTransferredState(TransferredState m, Address sender) {
         this.application = (AMOApplication<Application>) m.application();
+        backupAck = null;
         send(new StateTransferAck(), sender);
     }
 
@@ -118,6 +123,7 @@ class PBServer extends Node {
     // Your code here...
     private void onForwardedRequestTimer(ForwardedRequestTimer t) {
         if (backupAck == null && Objects.equals(myView.primary(), address()) && myView.backup() != null) {
+            backupAck = null;
             this.send(new ForwardedRequest(t.amoCommand(), t.client()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);
         }
@@ -127,6 +133,7 @@ class PBServer extends Node {
         if (!stateTransferDone  &&
                 Objects.equals(myView.primary(), address())
                 && myView.backup() != null && !Objects.equals(oldView.backup(), myView.backup())) {
+            stateTransferDone = false;
             this.send(new TransferredState(application), myView.backup());
             this.set(t, TRANSFERRED_RETRY_MILLIS);
         }

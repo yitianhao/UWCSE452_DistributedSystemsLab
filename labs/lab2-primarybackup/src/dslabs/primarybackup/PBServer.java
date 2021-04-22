@@ -83,7 +83,8 @@ class PBServer extends Node {
                 if (Objects.equals(m.view().primary(), address()) && m.view().backup() != null) {
                     stateTransferDone = false;
                     stateTransferStarted = true;
-                    send(new TransferredState(application, m.view(), stateTransferSeqNum++), m.view().backup());
+                    stateTransferSeqNum++;
+                    send(new TransferredState(application, m.view(), stateTransferSeqNum), m.view().backup());
                     set(new TransferredStateTimer(m.view()), TRANSFERRED_RETRY_MILLIS);
                 } else {
                     myView = m.view();
@@ -94,7 +95,7 @@ class PBServer extends Node {
 
     // Your code here...
     private void handleForwardedRequest(ForwardedRequest m, Address sender) {
-        if (Objects.equals(myView.backup(), address())) {
+        if (Objects.equals(myView.backup(), address()) && (stateTransferDone || !stateTransferStarted)) {
             backupAck = null;
             AMOResult result = application.execute(m.command());
             send(new BackupAck(m.command(), m.client()), sender);
@@ -148,8 +149,9 @@ class PBServer extends Node {
 
     // Your code here...
     private void onForwardedRequestTimer(ForwardedRequestTimer t) {
-        if (backupAckStarted && backupAck == null && Objects.equals(myView.primary(), address())
-                && myView.backup() != null ) {
+        if (backupAckStarted && backupAck == null
+                && Objects.equals(myView.primary(), address())
+                && myView.backup() != null) {
             backupAck = null;
             this.send(new ForwardedRequest(t.amoCommand(), t.client()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);

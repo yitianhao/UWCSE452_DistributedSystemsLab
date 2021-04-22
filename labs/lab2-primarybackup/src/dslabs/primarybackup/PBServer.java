@@ -24,12 +24,13 @@ class PBServer extends Node {
 
     // Your code here...
     private AMOApplication<Application> application;
-    private View viewServerView;
     private View myView;
     private BackupAck backupAck;
     private boolean backupAckStarted;
     private boolean stateTransferDone;
     private boolean stateTransferStarted;
+    private int stateTransferSeqNum = 0;
+    private StateTransferAck prevStateTransferAck;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -57,8 +58,8 @@ class PBServer extends Node {
     private void handleRequest(Request m, Address sender) {
         // Your code here...
         if (Objects.equals(myView.primary(), address())
-                && (stateTransferDone || !stateTransferStarted)
-                && (backupAck != null || !backupAckStarted)) {
+                && (stateTransferDone || !stateTransferStarted) // cannot accept new client request if state transfer not done
+                && (backupAck != null || !backupAckStarted)) { // cannot accept new client request if previous request not done
             if (myView.backup() != null) {
                 backupAck = null;
                 backupAckStarted = true;
@@ -69,7 +70,7 @@ class PBServer extends Node {
                 send(new Reply(result), sender);
             }
         } else {
-            // do nothing or error messageSSystem.out.println("---");
+            // do nothing or error message
         }
     }
 
@@ -79,13 +80,11 @@ class PBServer extends Node {
 
         } else {
             if (stateTransferDone || !stateTransferStarted) {
-                viewServerView = m.view();
-                if (Objects.equals(m.view().primary(), address()) /*&& Objects.equals(myView.primary(), address())*/
-                        && m.view().backup() != null) {
+                if (Objects.equals(m.view().primary(), address()) && m.view().backup() != null) {
                     stateTransferDone = false;
                     stateTransferStarted = true;
-                    send(new TransferredState(application, viewServerView), m.view().backup());
-                    set(new TransferredStateTimer(), TRANSFERRED_RETRY_MILLIS);
+                    send(new TransferredState(application, m.view(), stateTransferSeqNum++), m.view().backup());
+                    set(new TransferredStateTimer(m.view()), TRANSFERRED_RETRY_MILLIS);
                 } else {
                     myView = m.view();
                 }
@@ -97,14 +96,13 @@ class PBServer extends Node {
     private void handleForwardedRequest(ForwardedRequest m, Address sender) {
         if (Objects.equals(myView.backup(), address())) {
             backupAck = null;
-            //backupAckStarted = true;
             AMOResult result = application.execute(m.command());
             send(new BackupAck(m.command(), m.client()), sender);
         }
     }
 
     private void handleBackupAck(BackupAck m, Address sender) {
-        if (Objects.equals(myView.primary(), address())) {
+        if (backupAckStarted && backupAck == null && Objects.equals(myView.primary(), address())) {
             backupAck = m;
             backupAckStarted = false;
             AMOResult result = application.execute(m.command());
@@ -113,19 +111,28 @@ class PBServer extends Node {
     }
 
     private void handleTransferredState(TransferredState m, Address sender) {
+        // I am the future backup
+        //System.out.println(stateTransferSeqNum + " | " + m.stateTransferSeqNum());
         if (Objects.equals(m.view().backup(), address()) && !Objects.equals(myView.primary(), address())) {
-            this.application = (AMOApplication<Application>) m.application();
-            myView = m.view();
-            send(new StateTransferAck(), sender);
+            if (stateTransferSeqNum < m.stateTransferSeqNum() || prevStateTransferAck == null) {
+                this.application = (AMOApplication<Application>) m.application();
+                myView = m.view();
+                stateTransferSeqNum = m.stateTransferSeqNum();
+                prevStateTransferAck = new StateTransferAck(m.view());
+                send(new StateTransferAck(m.view()), sender);
+            } else {
+                send(prevStateTransferAck, sender);
+            }
         }
     }
 
     private void handleStateTransferAck(StateTransferAck m, Address sender) {
-        if (stateTransferStarted && !stateTransferDone &&
-                Objects.equals(myView.primary(), address())) {
+        // I am the future primary
+        if (stateTransferStarted && !stateTransferDone
+                && Objects.equals(m.view().primary(), address())) {
             stateTransferDone = true;
             stateTransferStarted = false;
-            myView = viewServerView;
+            myView = m.view();
         }
 
     }
@@ -147,16 +154,20 @@ class PBServer extends Node {
             this.send(new ForwardedRequest(t.amoCommand(), t.client()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);
         }
+        //System.out.println("onForwardedRequestTimer");
     }
 
     private void onTransferredStateTimer(TransferredStateTimer t) {
-        if (stateTransferStarted && !stateTransferDone  &&
-                Objects.equals(myView.primary(), address())
-                && myView.backup() != null) {
+        View newView = t.newView();
+        if (stateTransferStarted && !stateTransferDone
+                && Objects.equals(newView.primary(), address())
+                && newView.backup() != null) {
             stateTransferDone = false;
-            this.send(new TransferredState(application, viewServerView), myView.backup());
+            stateTransferStarted = true;
+            this.send(new TransferredState(application, newView, stateTransferSeqNum), newView.backup());
             this.set(t, TRANSFERRED_RETRY_MILLIS);
         }
+        //System.out.println("onTransferredStateTimer | newView.backup() = " + newView.backup());
     }
 
     /* -------------------------------------------------------------------------

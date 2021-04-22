@@ -34,6 +34,7 @@ final class ForwardedRequestTimer implements Timer {
 @Data
 final class TransferredStateTimer implements Timer {
     static final int TRANSFERRED_RETRY_MILLIS = 25;
+    private final View newView;
 }
 
 @Data

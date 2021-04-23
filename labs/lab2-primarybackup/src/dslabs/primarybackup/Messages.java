@@ -64,4 +64,5 @@ class TransferredState implements Message {
 @Data
 class StateTransferAck implements Message {
     private final View view;
+    private final int stateTransferSeqNum;
 }

@@ -85,7 +85,7 @@ class PBServer extends Node {
                 if (Objects.equals(m.view().primary(), address()) && m.view().backup() != null) {
                     stateTransferDone = false;
                     stateTransferStarted = true;
-                    stateTransferSeqNum++;
+                    //stateTransferSeqNum++;
                     send(new TransferredState(application, m.view(), stateTransferSeqNum), m.view().backup());
                     set(new TransferredStateTimer(m.view()), TRANSFERRED_RETRY_MILLIS);
                 } else {
@@ -123,13 +123,14 @@ class PBServer extends Node {
     private void handleTransferredState(TransferredState m, Address sender) {
         // I am the future backup
         //System.out.println(stateTransferSeqNum + " | " + m.stateTransferSeqNum());
-        if (Objects.equals(m.view().backup(), address()) && !Objects.equals(myView.primary(), address())) {
+        if (Objects.equals(m.view().backup(), address())
+                && !Objects.equals(myView.primary(), address())) {
             if (stateTransferSeqNum < m.stateTransferSeqNum() || prevStateTransferAck == null) {
                 this.application = (AMOApplication<Application>) m.application();
                 myView = m.view();
                 stateTransferSeqNum = m.stateTransferSeqNum();
-                prevStateTransferAck = new StateTransferAck(m.view());
-                send(new StateTransferAck(m.view()), sender);
+                prevStateTransferAck = new StateTransferAck(m.view(), stateTransferSeqNum);
+                send(new StateTransferAck(m.view(), stateTransferSeqNum), sender);
             } else {
                 send(prevStateTransferAck, sender);
             }
@@ -139,9 +140,12 @@ class PBServer extends Node {
     private void handleStateTransferAck(StateTransferAck m, Address sender) {
         // I am the future primary
         if (stateTransferStarted && !stateTransferDone
-                && Objects.equals(m.view().primary(), address()) && myView.viewNum() < m.view().viewNum()) {
+                && Objects.equals(m.view().primary(), address())
+                && myView.viewNum() < m.view().viewNum()
+                && stateTransferSeqNum == m.stateTransferSeqNum()) {
             stateTransferDone = true;
             stateTransferStarted = false;
+            stateTransferSeqNum++;
             myView = m.view();
         }
 
@@ -178,7 +182,9 @@ class PBServer extends Node {
             this.send(new TransferredState(application, newView, stateTransferSeqNum), newView.backup());
             this.set(t, TRANSFERRED_RETRY_MILLIS);
         }
-        //System.out.println("onTransferredStateTimer | newView.backup() = " + newView.backup());
+//        System.out.println("onTransferredStateTimer | newView.backup() = " + newView.backup() +
+//                " | I am new primary : " + Objects.equals(newView.primary(), address()) +
+//                " | not finished transfer " + (stateTransferStarted && !stateTransferDone));
     }
 
     /* -------------------------------------------------------------------------

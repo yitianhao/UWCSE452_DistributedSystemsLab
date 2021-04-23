@@ -24,6 +24,7 @@ class PBServer extends Node {
 
     // Your code here...
     private AMOApplication<Application> application;
+    private AMOApplication<Application> initApplication;
     private View myView;
     private BackupAck backupAck;
     private boolean backupAckStarted;
@@ -41,6 +42,7 @@ class PBServer extends Node {
 
         // Your code here...
         this.application = new AMOApplication(app);
+        initApplication = application;
         myView = new View(STARTUP_VIEWNUM, null, null);
     }
 
@@ -79,7 +81,7 @@ class PBServer extends Node {
         if (myView.viewNum() >= m.view().viewNum()) {
 
         } else {
-            if (stateTransferDone || !stateTransferStarted) {
+            if ((stateTransferDone || !stateTransferStarted)) {
                 if (Objects.equals(m.view().primary(), address()) && m.view().backup() != null) {
                     stateTransferDone = false;
                     stateTransferStarted = true;
@@ -103,11 +105,18 @@ class PBServer extends Node {
     }
 
     private void handleBackupAck(BackupAck m, Address sender) {
-        if (backupAckStarted && backupAck == null && Objects.equals(myView.primary(), address())) {
-            backupAck = m;
-            backupAckStarted = false;
-            AMOResult result = application.execute(m.command());
-            send(new Reply(result), m.client());
+        if (backupAckStarted && backupAck == null
+                && Objects.equals(myView.primary(), address())) {
+            // in the case that backup fails, change a backup, the primary should not accept the backup's ack
+            // probably let the client resent a request and handle by the new view instead
+            if (Objects.equals(sender, myView.backup())) {
+                backupAck = m;
+                backupAckStarted = false;
+                if ((!stateTransferStarted || stateTransferDone)) {
+                    AMOResult result = application.execute(m.command());
+                    send(new Reply(result), m.client());
+                }
+            }
         }
     }
 
@@ -130,7 +139,7 @@ class PBServer extends Node {
     private void handleStateTransferAck(StateTransferAck m, Address sender) {
         // I am the future primary
         if (stateTransferStarted && !stateTransferDone
-                && Objects.equals(m.view().primary(), address())) {
+                && Objects.equals(m.view().primary(), address()) && myView.viewNum() < m.view().viewNum()) {
             stateTransferDone = true;
             stateTransferStarted = false;
             myView = m.view();

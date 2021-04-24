@@ -415,7 +415,7 @@ public class PrimaryBackupTest extends BaseJUnitTest {
         assertFalse(client.hasResult());
     }
 
-    @Test(timeout = 300 * 1000)
+    @Test(timeout = 20 * 1000)
     @PrettyTestName("At-most-once append")
     @Category({RunTests.class, UnreliableTests.class})
     @TestPointValue(15)
@@ -591,7 +591,7 @@ public class PrimaryBackupTest extends BaseJUnitTest {
         test10ConcurrentPut();
     }
 
-    @Test(timeout = 400 * 1000)
+    @Test(timeout = 30 * 1000)
     @PrettyTestName("Concurrent appends, same key, fail to backup")
     @Category({RunTests.class, UnreliableTests.class})
     @TestPointValue(20)

@@ -5,6 +5,7 @@ import dslabs.atmostonce.AMOCommand;
 import dslabs.atmostonce.AMOResult;
 import dslabs.framework.Address;
 import dslabs.framework.Application;
+import dslabs.framework.Command;
 import dslabs.framework.Node;
 import dslabs.framework.Result;
 import java.io.Serializable;
@@ -33,6 +34,7 @@ class PBServer extends Node {
     private boolean stateTransferring;
     private int stateTransferSeqNum = 0;
     private StateTransferAck prevStateTransferAck;
+    private Command currentCommand;
 
     private static class Tuple implements Serializable {
         private Integer seqNum;
@@ -94,20 +96,35 @@ class PBServer extends Node {
                 AMOResult result = (AMOResult) bookkeeping.get(sender).result;
                 send(new Reply(result), sender);
             } else {
-                // B. not executed before, no backup
-                if (myView.backup() == null) {
-                    AMOResult result = application.execute(m.command());
-                    bookkeeping.put(sender, new Tuple(m.command().sequenceNum(), result));
-                    send(new Reply(result), sender);
-                // C. not executed before, has backup
-                } else {
-                    if (!msgForwarding) {
+//                // B. not executed before, no backup
+//                if (myView.backup() == null) {
+//                    AMOResult result = application.execute(m.command());
+//                    bookkeeping.put(sender, new Tuple(m.command().sequenceNum(), result));
+//                    send(new Reply(result), sender);
+//                // C. not executed before, has backup
+//                } else {
+//                    if (!msgForwarding) {
+//                        msgForwarding = true;
+//                        send(new ForwardedRequest(m.command(), sender, myView.viewNum()), myView.backup());
+//                        set(new ForwardedRequestTimer(m.command(), sender),
+//                                FORWARDED_RETRY_MILLIS);
+//                    }
+//                }
+                if (!msgForwarding) {
+                    if (myView.backup() == null) {
+                        AMOResult result = application.execute(m.command());
+                        bookkeeping.put(sender, new Tuple(m.command().sequenceNum(), result));
+                        send(new Reply(result), sender);
+                        // C. not executed before, has backup
+                    } else {
                         msgForwarding = true;
+                        currentCommand = m.command();
                         send(new ForwardedRequest(m.command(), sender, myView.viewNum()), myView.backup());
                         set(new ForwardedRequestTimer(m.command(), sender),
                                 FORWARDED_RETRY_MILLIS);
                     }
                 }
+
             }
         }
     }
@@ -140,7 +157,7 @@ class PBServer extends Node {
     private void handleBackupAck(BackupAck m, Address sender) {
         if (msgForwarding && Objects.equals(myView.primary(), address())
                 && Objects.equals(sender, myView.backup())
-                && myView.viewNum() == m.backup_view_num()) {
+                && myView.viewNum() == m.backup_view_num() && Objects.equals(m.command(), currentCommand)) {
             // in the case that backup fails, change a backup, the primary should not accept the backup's ack
             // probably let the client resent a request and handle by the new view instead
             msgForwarding = false;
@@ -199,7 +216,6 @@ class PBServer extends Node {
             this.send(new ForwardedRequest(t.amoCommand(), t.client(), myView.viewNum()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);
         }
-        //System.out.println("onForwardedRequestTimer");
     }
 
     private void onTransferredStateTimer(TransferredStateTimer t) {
@@ -210,9 +226,6 @@ class PBServer extends Node {
             this.send(new TransferredState(application, newView, stateTransferSeqNum), newView.backup());
             this.set(t, TRANSFERRED_RETRY_MILLIS);
         }
-//        System.out.println("onTransferredStateTimer | newView.backup() = " + newView.backup() +
-//                " | I am new primary : " + Objects.equals(newView.primary(), address()) +
-//                " | not finished transfer " + (stateTransferStarted && !stateTransferDone));
     }
 
     /* -------------------------------------------------------------------------

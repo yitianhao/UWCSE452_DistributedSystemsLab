@@ -212,7 +212,7 @@ class PBServer extends Node {
     // Your code here...
     private void onForwardedRequestTimer(ForwardedRequestTimer t) {
         if (msgForwarding && Objects.equals(myView.primary(), address())
-                && myView.backup() != null) {
+                && myView.backup() != null && Objects.equals(t.amoCommand(), currentCommand)) {
             this.send(new ForwardedRequest(t.amoCommand(), t.client(), myView.viewNum()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);
         }

@@ -46,6 +46,7 @@ class Reply implements Message {
 class ForwardedRequest implements Message {
     private final AMOCommand command;
     private final Address client;
+    private final int primary_view_num;
 }
 
 @Data

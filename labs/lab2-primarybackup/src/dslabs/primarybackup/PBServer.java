@@ -65,7 +65,7 @@ class PBServer extends Node {
             if (myView.backup() != null) {
                 backupAck = null;
                 backupAckStarted = true;
-                send(new ForwardedRequest(m.command(), sender), myView.backup());
+                send(new ForwardedRequest(m.command(), sender, myView.viewNum()), myView.backup());
                 set(new ForwardedRequestTimer(m.command(), sender), FORWARDED_RETRY_MILLIS);
             } else {
                 AMOResult result = application.execute(m.command());
@@ -82,7 +82,7 @@ class PBServer extends Node {
 
         } else {
             if ((stateTransferDone || !stateTransferStarted)) {
-                if (Objects.equals(m.view().primary(), address()) && m.view().backup() != null) {
+                if (Objects.equals(m.view().primary(), address()) && m.view().backup() != null && (backupAck != null || !backupAckStarted)) {
                     stateTransferDone = false;
                     stateTransferStarted = true;
                     //stateTransferSeqNum++;
@@ -97,7 +97,9 @@ class PBServer extends Node {
 
     // Your code here...
     private void handleForwardedRequest(ForwardedRequest m, Address sender) {
-        if (Objects.equals(myView.backup(), address()) && (stateTransferDone || !stateTransferStarted)) {
+        if (Objects.equals(myView.backup(), address())
+                && (stateTransferDone || !stateTransferStarted)
+                && m.primary_view_num() == myView.viewNum()) {
             backupAck = null;
             AMOResult result = application.execute(m.command());
             send(new BackupAck(m.command(), m.client()), sender);
@@ -166,7 +168,7 @@ class PBServer extends Node {
                 && Objects.equals(myView.primary(), address())
                 && myView.backup() != null) {
             backupAck = null;
-            this.send(new ForwardedRequest(t.amoCommand(), t.client()), myView.backup());
+            this.send(new ForwardedRequest(t.amoCommand(), t.client(), myView.viewNum()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);
         }
         //System.out.println("onForwardedRequestTimer");

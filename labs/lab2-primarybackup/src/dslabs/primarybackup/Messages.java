@@ -53,6 +53,7 @@ class ForwardedRequest implements Message {
 class BackupAck implements Message {
     private final AMOCommand command;
     private final Address client;
+    private final int backup_view_num;
 }
 
 @Data

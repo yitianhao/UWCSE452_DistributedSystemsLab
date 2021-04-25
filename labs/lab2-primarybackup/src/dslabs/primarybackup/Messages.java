@@ -60,11 +60,11 @@ class BackupAck implements Message {
 class TransferredState implements Message {
     private final Application application;
     private final View view;
-    private final int stateTransferSeqNum;
+    //private final int stateTransferSeqNum;
 }
 
 @Data
 class StateTransferAck implements Message {
     private final View view;
-    private final int stateTransferSeqNum;
+    //private final int stateTransferSeqNum;
 }

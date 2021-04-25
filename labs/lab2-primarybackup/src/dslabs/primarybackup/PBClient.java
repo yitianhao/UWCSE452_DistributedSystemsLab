@@ -26,7 +26,7 @@ class PBClient extends Node implements Client {
     private Reply reply;
     private int seqNum = 0;
     private View currentView;
-    private boolean viewRelied;
+    private boolean viewReplied;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -106,7 +106,7 @@ class PBClient extends Node implements Client {
             } else {
                 currentView = m.view();
             }
-            viewRelied = true;
+            viewReplied = true;
         }
     }
 
@@ -117,10 +117,10 @@ class PBClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void onClientTimer(ClientTimer t) {
         // Your code here...
-        if (currentView == null || currentView.primary() == null || !viewRelied) {
+        if (currentView == null || currentView.primary() == null || !viewReplied) {
             this.send(new GetView(), viewServer);
             this.set(t, CLIENT_RETRY_MILLIS);
-        } else if (seqNum == t.amoCommand().sequenceNum() && reply == null) {
+        } else if (viewReplied && seqNum == t.amoCommand().sequenceNum() && reply == null) {
             this.send(new Request(request.command()), currentView.primary());
             this.set(t, CLIENT_RETRY_MILLIS);
         }
@@ -129,7 +129,7 @@ class PBClient extends Node implements Client {
     }
 
     private synchronized void onPrimarySeemsDeadTimer(PrimarySeemsDeadTimer t) {
-        viewRelied = false;
+        viewReplied = false;
         this.send(new GetView(), viewServer);
         AMOCommand amoCommand = new AMOCommand(null, address(), seqNum); // need improvement
         this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);

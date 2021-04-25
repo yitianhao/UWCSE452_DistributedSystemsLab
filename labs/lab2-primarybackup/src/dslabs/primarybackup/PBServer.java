@@ -8,6 +8,7 @@ import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Node;
 import dslabs.framework.Result;
+import dslabs.shardkv.ShardStoreClient;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Objects;
@@ -32,7 +33,7 @@ class PBServer extends Node {
     private View myView;
     private boolean msgForwarding;
     private boolean stateTransferring;
-    private int stateTransferSeqNum = 0;
+    //private int stateTransferSeqNum = 0;
     private StateTransferAck prevStateTransferAck;
     private Command currentCommand;
 
@@ -90,6 +91,10 @@ class PBServer extends Node {
        -----------------------------------------------------------------------*/
     private void handleRequest(Request m, Address sender) {
         // Your code here...
+//        if (m.command().sequenceNum()==65 && Objects.equals(myView.primary(), address())) {
+//            System.out.println("client = " + sender + " | primary = " + address() + " | stateTransferring = " + stateTransferring);
+//            System.out.println("client1 -> server1 seqNum = 65 | bookkeeping = " + bookkeeping.get(sender).seqNum + " | msgForwarding = " + msgForwarding);
+//        }
         if (Objects.equals(myView.primary(), address()) && !stateTransferring) {
             // A. already executed
             if (bookkeeping.containsKey(sender) && bookkeeping.get(sender).seqNum >= m.command().sequenceNum()) {
@@ -173,12 +178,14 @@ class PBServer extends Node {
         // I am the future backup
         //System.out.println(stateTransferSeqNum + " | " + m.stateTransferSeqNum());
         if (Objects.equals(m.view().backup(), address())) {
-            if (stateTransferSeqNum < m.stateTransferSeqNum() || prevStateTransferAck == null) {
+            if (/*stateTransferSeqNum < m.stateTransferSeqNum() ||*/ prevStateTransferAck == null || myView.viewNum() < m.view().viewNum()) {
                 this.application = (AMOApplication<Application>) m.application();
                 myView = m.view();
-                stateTransferSeqNum = m.stateTransferSeqNum();
-                prevStateTransferAck = new StateTransferAck(m.view(), stateTransferSeqNum);
-                send(new StateTransferAck(m.view(), stateTransferSeqNum), sender);
+                //stateTransferSeqNum = m.stateTransferSeqNum();
+//                prevStateTransferAck = new StateTransferAck(m.view(), stateTransferSeqNum);
+//                send(new StateTransferAck(m.view(), stateTransferSeqNum), sender);
+                prevStateTransferAck = new StateTransferAck(m.view());
+                send(new StateTransferAck(m.view()), sender);
             } else {
                 send(prevStateTransferAck, sender);
             }
@@ -192,9 +199,9 @@ class PBServer extends Node {
         if (stateTransferring
                 && Objects.equals(m.view().primary(), address())
                 && myView.viewNum() < m.view().viewNum()
-                && stateTransferSeqNum == m.stateTransferSeqNum()) {
+                /*&& stateTransferSeqNum == m.stateTransferSeqNum()*/) {
             stateTransferring = false;
-            stateTransferSeqNum++;
+            //stateTransferSeqNum++;
             myView = m.view();
         }
 
@@ -212,7 +219,7 @@ class PBServer extends Node {
     // Your code here...
     private void onForwardedRequestTimer(ForwardedRequestTimer t) {
         if (msgForwarding && Objects.equals(myView.primary(), address())
-                && myView.backup() != null) {
+                && myView.backup() != null && Objects.equals(t.amoCommand(), currentCommand)) {
             this.send(new ForwardedRequest(t.amoCommand(), t.client(), myView.viewNum()), myView.backup());
             this.set(t, FORWARDED_RETRY_MILLIS);
         }
@@ -223,7 +230,8 @@ class PBServer extends Node {
         if (stateTransferring
                 && Objects.equals(newView.primary(), address())
                 && newView.backup() != null) {
-            this.send(new TransferredState(application, newView, stateTransferSeqNum), newView.backup());
+            //this.send(new TransferredState(application, newView, stateTransferSeqNum), newView.backup());
+            this.send(new TransferredState(application, newView), newView.backup());
             this.set(t, TRANSFERRED_RETRY_MILLIS);
         }
     }
@@ -234,7 +242,7 @@ class PBServer extends Node {
     // Your code here...
     private void stateTransfer(View view) {
         stateTransferring = true;
-        send(new TransferredState(application, view, stateTransferSeqNum), view.backup());
+        send(new TransferredState(application, view), view.backup());
         set(new TransferredStateTimer(view), TRANSFERRED_RETRY_MILLIS);
     }
 

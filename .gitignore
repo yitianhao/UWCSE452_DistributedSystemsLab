@@ -9,6 +9,7 @@ traces/
 .idea/workspace.xml
 .idea/tasks.xml
 .idea-out
+.idea/vcs.xml
 
 
 # Common OS/Editor files
@@ -24,5 +25,7 @@ Desktop.ini
 
 # analytics
 .usage-database.db
-.idea/vcs.xml
+
+# test and submission
 submit.tar.gz
+log.txt

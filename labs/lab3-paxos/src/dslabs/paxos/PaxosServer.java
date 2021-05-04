@@ -1,11 +1,16 @@
 package dslabs.paxos;
 
+import dslabs.atmostonce.AMOApplication;
 import dslabs.framework.Address;
 import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Node;
+import java.util.HashMap;
+import java.util.Objects;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
+
+import static java.lang.Integer.parseInt;
 
 
 @ToString(callSuper = true)
@@ -14,6 +19,8 @@ public class PaxosServer extends Node {
     private final Address[] servers;
 
     // Your code here...
+    private final AMOApplication<Application> application;
+    private HashMap<Integer, LogEntry> log;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -23,6 +30,8 @@ public class PaxosServer extends Node {
         this.servers = servers;
 
         // Your code here...
+        this.application = new AMOApplication<>(app);
+        this.log = new HashMap<>();
     }
 
 
@@ -135,4 +144,43 @@ public class PaxosServer extends Node {
         Utils
        -----------------------------------------------------------------------*/
     // Your code here...
+
+    /* -------------------------------------------------------------------------
+        Inner Classes
+       -----------------------------------------------------------------------*/
+    private static class Ballot implements Comparable<Ballot> {
+        private Integer seqNum;
+        private Address address;
+
+        public Ballot(Integer seqNum, Address address) {
+            this.seqNum = seqNum;
+            this.address = address;
+        }
+
+        public int compareTo(Ballot other) {
+            if (Objects.equals(address, other.address)) {
+                return seqNum.compareTo(other.seqNum);
+            } else if (Objects.equals(seqNum, other.seqNum)){
+                return address.compareTo(other.address);
+            } else {
+                return convertToDouble(seqNum, address).compareTo(convertToDouble(other.seqNum, other.address));
+            }
+        }
+
+        private Double convertToDouble(Integer seqNum, Address address) {
+            return seqNum + 0.1 * parseInt(address.toString().substring(("server").length()));
+        }
+    }
+
+    private static class LogEntry {
+        private Ballot ballot;
+        private PaxosLogSlotStatus paxosLogSlotStatus;
+        private Command command;
+
+        public LogEntry(Ballot ballot, PaxosLogSlotStatus status, Command command) {
+            this.ballot = ballot;
+            this.paxosLogSlotStatus = status;
+            this.command = command;
+        }
+    }
 }

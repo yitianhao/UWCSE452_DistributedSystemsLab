@@ -9,3 +9,16 @@ Brief description of design:
 Union of hours spent on the lab:
 Total time spent on the lab:
 
+Development timeline:
+1. write inner/helper classes for Ballots and Log(s)
+2. Accept messages/timers (P2As, P2Bs, Decisions)
+  You can start by hard-coding one of the servers as the leader
+  Make sure executions are happening in order (starting from slot_out and don’t skip slots) and progress can be made for clients
+
+
+Leader election/Prepares messages/timers (P1As, P1Bs)
+Start leader election at the very start
+Check if leader is alive
+Heartbeats
+Catch-up mechanism
+Garbage collectio

@@ -22,3 +22,8 @@ Check if leader is alive
 Heartbeats
 Catch-up mechanism
 Garbage collectio
+
+
+map
+clientID->client request seqNum
+1->1

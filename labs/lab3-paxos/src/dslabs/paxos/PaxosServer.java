@@ -33,6 +33,7 @@ public class PaxosServer extends Node {
     private Ballot ballot;
     private HashMap<Integer, AcceptedEntry> accepted;
     private HashMap<Integer, HashSet<Address>> receivedP2BFrom;
+    private HashMap<Address, Integer> clientRequests;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -46,18 +47,31 @@ public class PaxosServer extends Node {
         this.log = new HashMap<>();
         slot_in = 1;
         slot_out = 1;
-        seqNum = 1;
+        seqNum = 0;
         ballot = new Ballot(seqNum, address);
         accepted = new HashMap<>();
         receivedP2BFrom = new HashMap<>();
+        clientRequests = new HashMap<>();
     }
 
 
     @Override
     public void init() {
         // Your code here...
-        if (Objects.equals(address(), servers[servers.length - 1])) {
+        Address max = servers[0];
+        //System.out.println("max is "+max);
+        for (Address a: servers) {
+            if (a.compareTo(max) > 0) {
+                max = a;
+            }
+        }
+        //System.out.println("max is "+max);
+        if (Objects.equals(address(), max)) {
             leader = true;
+            ballot = new Ballot(seqNum, max);
+            //System.out.println("max is "+max);
+        } else {
+            ballot = new Ballot(seqNum, max);
         }
     }
 
@@ -150,7 +164,7 @@ public class PaxosServer extends Node {
      */
     public int lastNonEmpty() {
         // Your code here...
-        return 0;
+        return slot_in - 1;
     }
 
     /* -------------------------------------------------------------------------
@@ -159,18 +173,24 @@ public class PaxosServer extends Node {
     private void handlePaxosRequest(PaxosRequest m, Address sender) {
         // Your code here...
         // As a non-leader, need to drop client request
-        // Q1:
-        // leader should not re-propose A. already executed B. already proposed C. already decided
-        if (leader) {
+
+//        if (Objects.equals(address(), "server5")) {
+//            System.out.println("leader is :" + address());
+//        }
+
+        if (leader && clientRequests.getOrDefault(sender, -1) < m.amoCommand().sequenceNum()) {
+            //System.out.println(sender + " | " + m.amoCommand().sequenceNum());
+            LogEntry logEntry = new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, m.amoCommand());
+            log.put(slot_in, logEntry);
+            clientRequests.put(sender, m.amoCommand().sequenceNum());
             for (Address otherServer : servers) {
                 if (!Objects.equals(address(), otherServer)) {
-                    LogEntry logEntry = new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, m.amoCommand());
-                    log.put(slot_in, logEntry);
+                    //System.out.println("handlePaxosRequest");
                     send(new P2A(ballot, slot_in, m.amoCommand()), otherServer);
                     set(new P2ATimer(slot_in, otherServer, m.amoCommand()), P2A_RETRY_TIMER);
-                    slot_in++;
                 }
             }
+            slot_in++;
         }
     }
 
@@ -179,8 +199,12 @@ public class PaxosServer extends Node {
     private void handleP2A(P2A m, Address sender) {
         // only accept it if the ballot in the message matches the acceptor’s ballot,
         // which means the acceptor considers the sender to be the current leader
+        //System.out.println("leader: " + ballot.toString() + " | acceptor: " + m.ballot().toString());
         if (m.ballot().compareTo(ballot) == 0) { // accept
+            //System.out.println("acceptors accepted: handleP2A");
             accepted.put(m.slotNum(), new AcceptedEntry(m.ballot(), m.command()));
+            log.put(m.slotNum(), new LogEntry(m.ballot(), PaxosLogSlotStatus.ACCEPTED, m.command()));
+            slot_in = m.slotNum() + 1;
             send(new P2B(m.ballot(), m.slotNum()), sender);
         } else {
             send(new P2B(null, null), sender); // Q5: delete this?
@@ -189,19 +213,22 @@ public class PaxosServer extends Node {
 
     // ---------------leader--------------
     private void handleP2B(P2B m, Address sender) {
+        //System.out.println("handleP2B");
         if (m.ballot() != null) {
             HashSet<Address> addresses = receivedP2BFrom.getOrDefault(m.slotNum(), new HashSet<>());
             addresses.add(sender);
             receivedP2BFrom.put(m.slotNum(), addresses);
         }
+        //System.out.println("slotNum " + m.slotNum() + " | is: " + receivedP2BFrom.get(m.slotNum()).toString());
         if (receivedP2BFrom.getOrDefault(m.slotNum(), new HashSet<>()).size() >= servers.length / 2) {
             log.put(m.slotNum(), new LogEntry(m.ballot(), PaxosLogSlotStatus.CHOSEN, log.get(m.slotNum()).command));
-
+            //System.out.println(slot_in + "out: "+ slot_out);
             for (int i = slot_out; i < slot_in; i++) {
                 if (log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
                     AMOCommand command = log.get(i).command;
                     AMOResult result = application.execute(command);
                     send(new PaxosReply(result), command.clientID());
+                    //System.out.println("executed");
                 } else {
                     slot_out = i;
                     break;

@@ -21,3 +21,15 @@ final class P2ATimer implements Timer {
     private final Address acceptor;
     private final AMOCommand command;
 }
+
+
+@Data
+final class HeartbeatCheckTimer implements Timer {
+    static final int HEARTBEAT_CHECK_MILLIS = 100;
+}
+
+@Data
+final class HeartbeatTimer implements Timer {
+    static final int HEARTBEAT_MILLIS = 25;
+    private final Address acceptor;
+}

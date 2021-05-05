@@ -14,6 +14,7 @@ import java.util.Objects;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
+import static dslabs.paxos.HeartbeatTimer.HEARTBEAT_MILLIS;
 import static dslabs.paxos.P2ATimer.P2A_RETRY_TIMER;
 import static java.lang.Integer.parseInt;
 
@@ -34,6 +35,7 @@ public class PaxosServer extends Node {
     private HashMap<Integer, AcceptedEntry> accepted;
     private HashMap<Integer, HashSet<Address>> receivedP2BFrom;
     private HashMap<Address, Integer> clientRequests;
+    private boolean heartbeatReceivedThisInterval;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -72,6 +74,14 @@ public class PaxosServer extends Node {
             //System.out.println("max is "+max);
         } else {
             ballot = new Ballot(seqNum, max);
+        }
+
+
+        for (Address otherServer : servers) {
+            if (!Objects.equals(address(), otherServer)) {
+                this.send(new Heartbeat(log, slot_out, slot_in), otherServer);
+                this.set(new HeartbeatTimer(otherServer), HEARTBEAT_MILLIS);
+            }
         }
     }
 
@@ -203,11 +213,34 @@ public class PaxosServer extends Node {
         if (m.ballot().compareTo(ballot) == 0) { // accept
             //System.out.println("acceptors accepted: handleP2A");
             accepted.put(m.slotNum(), new AcceptedEntry(m.ballot(), m.command()));
-            log.put(m.slotNum(), new LogEntry(m.ballot(), PaxosLogSlotStatus.ACCEPTED, m.command()));
+            log.put(m.slotNum(),
+                    new LogEntry(m.ballot(), PaxosLogSlotStatus.ACCEPTED, m.command()));
             slot_in = m.slotNum() + 1;
             send(new P2B(m.ballot(), m.slotNum()), sender);
         } else {
             send(new P2B(null, null), sender); // Q5: delete this?
+        }
+    }
+
+    private void handleHeartbeat(Heartbeat m, Address sender) {
+        if (!leader) {
+            heartbeatReceivedThisInterval = true;
+            if (!Objects.equals(log, m.log())) {
+                log = m.log();
+                slot_out = m.slot_out();
+                slot_in = m.slot_in();
+                for (int i = slot_out; i < slot_in; i++) {
+                    if (log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
+                        AMOCommand command = log.get(i).command;
+                        AMOResult result = application.execute(command);
+                        send(new PaxosReply(result), command.clientID());
+                        //System.out.println("executed");
+                    } else {
+                        slot_out = i;
+                        break;
+                    }
+                }
+            }
         }
     }
 
@@ -259,6 +292,12 @@ public class PaxosServer extends Node {
         }
     }
 
+    private void onHeartbeatTimer(HeartbeatTimer t) {
+        // Your code here...
+        this.send(new Heartbeat(log, slot_out, slot_in), t.acceptor());
+        this.set(t, HEARTBEAT_MILLIS);
+    }
+
     /* -------------------------------------------------------------------------
         Utils
        -----------------------------------------------------------------------*/
@@ -289,7 +328,7 @@ public class PaxosServer extends Node {
         }
     }
 
-    private static class LogEntry {
+    public static class LogEntry {
         private Ballot ballot;
         private PaxosLogSlotStatus paxosLogSlotStatus;
         private AMOCommand command;

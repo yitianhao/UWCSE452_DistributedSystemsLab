@@ -1,5 +1,6 @@
 package dslabs.paxos;
 
+import com.sun.jdi.request.ClassUnloadRequest;
 import dslabs.atmostonce.AMOApplication;
 import dslabs.atmostonce.AMOCommand;
 import dslabs.atmostonce.AMOResult;
@@ -8,6 +9,8 @@ import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Node;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Objects;
@@ -17,6 +20,7 @@ import lombok.ToString;
 import static dslabs.paxos.HeartbeatCheckTimer.HEARTBEAT_CHECK_MILLIS;
 import static dslabs.paxos.HeartbeatTimer.HEARTBEAT_MILLIS;
 import static dslabs.paxos.P2ATimer.P2A_RETRY_TIMER;
+import static java.lang.Integer.max;
 import static java.lang.Integer.parseInt;
 
 
@@ -38,6 +42,10 @@ public class PaxosServer extends Node {
     private HashMap<Integer, HashSet<Address>> receivedNegativeP2BFrom;
     private HashMap<Address, Integer> clientRequests;
     private boolean heartbeatReceivedThisInterval;
+    private HashSet<Address> receivedPositiveP1BFrom;
+    private HashSet<Address> receivedNegativeP1BFrom;
+    private HashMap<Integer, AcceptedEntry> proposals;
+
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -54,6 +62,7 @@ public class PaxosServer extends Node {
         seqNum = 0;
         ballot = new Ballot(seqNum, address);
         accepted = new HashMap<>();
+        proposals = new HashMap<>();
         receivedPositiveP2BFrom = new HashMap<>();
         receivedNegativeP2BFrom = new HashMap<>();
         clientRequests = new HashMap<>();
@@ -63,6 +72,13 @@ public class PaxosServer extends Node {
     @Override
     public void init() {
         // Your code here...
+        for (Address otherServer : servers) {
+            if (!Objects.equals(address(), otherServer)) {
+                send(new P1A(ballot), otherServer);
+            }
+        }
+
+
         Address max = servers[0];
         //System.out.println("max is "+max);
         for (Address a: servers) {
@@ -202,14 +218,39 @@ public class PaxosServer extends Node {
             LogEntry logEntry = new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, m.amoCommand());
             log.put(slot_in, logEntry);
             clientRequests.put(sender, m.amoCommand().sequenceNum());
+            boolean clientRequestDone = false;
             for (Address otherServer : servers) {
                 if (!Objects.equals(address(), otherServer)) {
                     //System.out.println("handlePaxosRequest");
-                    send(new P2A(ballot, slot_in, m.amoCommand()), otherServer);
-                    set(new P2ATimer(slot_in, otherServer, m.amoCommand()), P2A_RETRY_TIMER);
+
+                    clientRequestDone = false;
+                    Integer max_slot_num = Collections.max(proposals.keySet());
+                    for (int i = slot_in; i <= max_slot_num; i++) {
+                        if (!proposals.containsKey(i)) {
+                            send(new P2A(ballot, i, null), otherServer);
+                            set(new P2ATimer(i, otherServer, null), P2A_RETRY_TIMER);
+                        } else {
+                            if (Objects.equals(proposals.get(i).command, m.amoCommand())) {
+                                clientRequestDone = true;
+                            }
+                            send(new P2A(ballot, i, proposals.get(i).command), otherServer);
+                            set(new P2ATimer(i, otherServer, proposals.get(i).command), P2A_RETRY_TIMER);
+                        }
+                    }
+                    slot_in = max_slot_num + 1;
+
+
+                    if (!clientRequestDone) {
+                        send(new P2A(ballot, slot_in, m.amoCommand()),
+                                otherServer);
+                        set(new P2ATimer(slot_in, otherServer, m.amoCommand()),
+                                P2A_RETRY_TIMER);
+                    }
                 }
             }
-            slot_in++;
+            if (!clientRequestDone) {
+                slot_in++;
+            }
         }
     }
 
@@ -255,6 +296,8 @@ public class PaxosServer extends Node {
         }
     }
 
+
+
     // ---------------leader--------------
     private void handleP2B(P2B m, Address sender) {
         //System.out.println("handleP2B");
@@ -296,6 +339,50 @@ public class PaxosServer extends Node {
          * attach the acceptor’s log with the response. Then update/merge each side’s log.
          * (Although you should get normal p2a working first.) Lots of different possible protocols and implementations to consider!
          */
+    }
+
+
+
+
+    private void handleP1A(P1A m, Address sender) {
+        if (ballot.compareTo(m.ballot()) < 0) {
+            // ok!
+            ballot = m.ballot();
+            leader = false;
+            send(new P1B(ballot, accepted), sender);
+        } else {
+            // nope!
+            send(new P1B(null, null), sender);
+        }
+    }
+
+    private void handleP1B(P1B m, Address sender) {
+        if (m.ballot() == null) {
+            // don't resend P1A
+            receivedNegativeP1BFrom.add(sender);
+        } else {
+            if (Objects.equals(m.ballot(), ballot)) {
+                receivedPositiveP1BFrom.add(sender);
+                for (Integer slot_num : m.accepted().keySet()) {
+                    if (!proposals.containsKey(slot_num)) {
+                        proposals.put(slot_num, m.accepted().get(slot_num));
+                    } else {
+                        if (proposals.get(slot_num).ballot.compareTo(m.accepted().get(slot_num).ballot) < 0) {
+                            proposals.put(slot_num, m.accepted().get(slot_num));
+                        }
+                    }
+                }
+            }
+        }
+
+        for (Integer slot_num : proposals.keySet()) {
+            log.put(slot_num, new LogEntry(proposals.get(slot_num).ballot, PaxosLogSlotStatus.ACCEPTED, proposals.get(slot_num).command));
+        }
+
+        if (receivedPositiveP1BFrom.size() >= servers.length / 2) {
+            leader = true;
+
+        }
     }
 
 
@@ -386,7 +473,7 @@ public class PaxosServer extends Node {
         }
     }
 
-    private static class AcceptedEntry {
+    public static class AcceptedEntry {
         private Ballot ballot;
         private AMOCommand command;
 

@@ -65,6 +65,8 @@ public class PaxosServer extends Node {
         proposals = new HashMap<>();
         receivedPositiveP2BFrom = new HashMap<>();
         receivedNegativeP2BFrom = new HashMap<>();
+        receivedPositiveP1BFrom = new HashSet<>();
+        receivedNegativeP1BFrom = new HashSet<>();
         clientRequests = new HashMap<>();
     }
 
@@ -75,6 +77,7 @@ public class PaxosServer extends Node {
         for (Address otherServer : servers) {
             if (!Objects.equals(address(), otherServer)) {
                 send(new P1A(ballot), otherServer);
+                // Q1: need P1ATimer
             }
         }
 
@@ -224,20 +227,24 @@ public class PaxosServer extends Node {
                     //System.out.println("handlePaxosRequest");
 
                     clientRequestDone = false;
-                    Integer max_slot_num = Collections.max(proposals.keySet());
-                    for (int i = slot_in; i <= max_slot_num; i++) {
-                        if (!proposals.containsKey(i)) {
-                            send(new P2A(ballot, i, null), otherServer);
-                            set(new P2ATimer(i, otherServer, null), P2A_RETRY_TIMER);
-                        } else {
-                            if (Objects.equals(proposals.get(i).command, m.amoCommand())) {
-                                clientRequestDone = true;
+                    if (proposals.keySet().size() > 0) {
+                        Integer max_slot_num = Collections.max(proposals.keySet());
+                        for (int i = slot_in; i <= max_slot_num; i++) {
+                            if (!proposals.containsKey(i)) {
+                                send(new P2A(ballot, i, null), otherServer);
+                                set(new P2ATimer(i, otherServer, null),
+                                        P2A_RETRY_TIMER);
+                            } else {
+                                if (Objects.equals(proposals.get(i).command, m.amoCommand())) {
+                                    clientRequestDone = true;
+                                }
+                                send(new P2A(ballot, i, proposals.get(i).command), otherServer);
+                                set(new P2ATimer(i, otherServer, proposals.get(i).command),
+                                        P2A_RETRY_TIMER);
                             }
-                            send(new P2A(ballot, i, proposals.get(i).command), otherServer);
-                            set(new P2ATimer(i, otherServer, proposals.get(i).command), P2A_RETRY_TIMER);
                         }
+                        slot_in = max_slot_num + 1;
                     }
-                    slot_in = max_slot_num + 1;
 
 
                     if (!clientRequestDone) {
@@ -273,7 +280,6 @@ public class PaxosServer extends Node {
     }
 
     private void handleHeartbeat(Heartbeat m, Address sender) {
-
         // check the condition of accepting the log ?????
         if (!leader) {
             heartbeatReceivedThisInterval = true;
@@ -331,16 +337,7 @@ public class PaxosServer extends Node {
             leader = false;
             // start electing
         }
-        /**
-         * Q4
-         * Need a way to sync logs between leader and all the acceptors to learn about missed decisions.
-         * They can also sync up with heartbeat messages.
-         * Alternatively, when the leader sends an accept message, attach the leader’s log with the request. When acceptor replies,
-         * attach the acceptor’s log with the response. Then update/merge each side’s log.
-         * (Although you should get normal p2a working first.) Lots of different possible protocols and implementations to consider!
-         */
     }
-
 
 
 
@@ -381,7 +378,7 @@ public class PaxosServer extends Node {
 
         if (receivedPositiveP1BFrom.size() >= servers.length / 2) {
             leader = true;
-
+            // Q2: how does other servers know that you are the leader now?
         }
     }
 
@@ -391,14 +388,6 @@ public class PaxosServer extends Node {
        -----------------------------------------------------------------------*/
     // Your code here...
     private void onP2ATimer(P2ATimer t) {
-//        if (!receivedPositiveP2BFrom.containsKey(t.slotNum()) ||
-//                (receivedPositiveP2BFrom.get(t.slotNum()).size() < servers.length / 2 &&
-//            !receivedPositiveP2BFrom.get(t.slotNum()).contains(t.acceptor())) ) {
-//            send(new P2A(ballot, t.slotNum(), t.command()), t.acceptor());
-//            set(t, P2A_RETRY_TIMER);
-//        }
-
-
         if (receivedPositiveP2BFrom.containsKey(t.slotNum()) &&
             (receivedPositiveP2BFrom.get(t.slotNum()).contains(t.acceptor()) ||
             receivedPositiveP2BFrom.get(t.slotNum()).size() >= servers.length / 2)) {
@@ -426,6 +415,11 @@ public class PaxosServer extends Node {
             this.set(t, HEARTBEAT_CHECK_MILLIS);
         } else {
             // try to be leader
+            for (Address otherServer : servers) {
+                if (!Objects.equals(address(), otherServer)) {
+                    send(new P1A(ballot), otherServer);
+                }
+            }
         }
     }
 

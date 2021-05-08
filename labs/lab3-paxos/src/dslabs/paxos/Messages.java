@@ -39,5 +39,5 @@ class P1A implements Message {
 @Data
 class P1B implements Message {
     private final Ballot ballot;
-    private final HashMap<Integer, AcceptedEntry> accepted;
+    private final HashMap<Integer, LogEntry> log;
 }

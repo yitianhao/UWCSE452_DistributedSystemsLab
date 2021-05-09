@@ -22,6 +22,11 @@ final class P2ATimer implements Timer {
     private final AMOCommand command;
 }
 
+@Data
+final class P1ATimer implements Timer {
+    static final int P1A_RETRY_TIMER = 25;
+    private final Address acceptor;
+}
 
 @Data
 final class HeartbeatCheckTimer implements Timer {

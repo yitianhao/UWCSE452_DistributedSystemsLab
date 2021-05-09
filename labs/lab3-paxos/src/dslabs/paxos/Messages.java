@@ -27,8 +27,8 @@ class P2B implements Message {
 @Data
 class Heartbeat implements Message {
     private final HashMap<Integer, LogEntry> log;
-    private final int slot_out;
-    private final int slot_in;
+//    private final int slot_out;
+//    private final int slot_in;
 }
 
 @Data

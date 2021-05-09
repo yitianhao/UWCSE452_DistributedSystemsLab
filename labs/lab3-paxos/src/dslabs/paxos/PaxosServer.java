@@ -256,47 +256,48 @@ public class PaxosServer extends Node {
     // --------potential leader--------
     // update based on section slides p63
     private void handleP1B(P1B m, Address sender) {
-        if (m.ballot().compareTo(ballot) == 0) {
-            if (m.log() == null) {
-                // don't resend P1A
-                receivedNegativeP1BFrom.add(sender);
-            } else {
-                receivedPositiveP1BFrom.add(sender);
-                mergeLog(m.log());
-            }
-        }
+        if (m.ballot().compareTo(ballot) == 0 && m.log() != null) {
+            receivedPositiveP1BFrom.add(sender);
+            mergeLog(m.log());
 
-        updateSlotIn();
-        //System.out.println("There are " + servers.length + " servers");
+            updateSlotIn();
+            //System.out.println("There are " + servers.length + " servers");
 
-        // -------leader has been elected----------
-        if (receivedPositiveP1BFrom.size() >= servers.length / 2) {
-            //System.out.println(address() + " is the leader!");
-            leader = true;
-            executeChosen();
-            // Send out phase 2 (P2A) messages for all values that have been accepted already
-            for (Address otherServer : servers) {
-                if (!Objects.equals(address(), otherServer)) {
-                    for (int i = slot_out; i < slot_in; i++) {
-                        if (log.containsKey(i) && log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.ACCEPTED) {
-                            send(new P2A(ballot, i, log.get(i).command), otherServer);
-                            set(new P2ATimer(i, otherServer, log.get(i).command), P2A_RETRY_TIMER);
-                        } else { // holes
-                            send(new P2A(ballot, i, null), otherServer);
-                            set(new P2ATimer(i, otherServer, null), P2A_RETRY_TIMER);
+            // -------leader has been elected----------
+            if (receivedPositiveP1BFrom.size() >= servers.length / 2) {
+                //System.out.println(address() + " is the leader!");
+                leader = true;
+                executeChosen();
+                // Send out phase 2 (P2A) messages for all values that have been accepted already
+                for (Address otherServer : servers) {
+                    if (!Objects.equals(address(), otherServer)) {
+                        for (int i = slot_out; i < slot_in; i++) {
+                            if (log.containsKey(i) && log.get(i).paxosLogSlotStatus ==
+                                    PaxosLogSlotStatus.ACCEPTED) {
+                                send(new P2A(ballot, i, log.get(i).command),
+                                        otherServer);
+                                set(new P2ATimer(i, otherServer, log.get(i).command), P2A_RETRY_TIMER);
+                            } else { // holes
+                                send(new P2A(ballot, i, null), otherServer);
+                                set(new P2ATimer(i, otherServer, null),
+                                        P2A_RETRY_TIMER);
+                            }
                         }
                     }
                 }
-            }
-            // begin sending out heartbeats
-            for (Address otherServer : servers) {
-                if (!Objects.equals(address(), otherServer)) {
-                    this.send(new Heartbeat(log), otherServer);
-                    this.set(new HeartbeatTimer(otherServer), HEARTBEAT_MILLIS);
+                // begin sending out heartbeats
+                for (Address otherServer : servers) {
+                    if (!Objects.equals(address(), otherServer)) {
+                        this.send(new Heartbeat(log), otherServer);
+                        this.set(new HeartbeatTimer(otherServer),
+                                HEARTBEAT_MILLIS);
+                    }
                 }
+                // ****Q2: how does other servers know that you are the leader now?
+                // i.e., when can a non-leader be assure that he can send out HeartbeatCheck
             }
-            // ****Q2: how does other servers know that you are the leader now?
-            // i.e., when can a non-leader be assure that he can send out HeartbeatCheck
+        } else {
+            receivedNegativeP1BFrom.add(sender);
         }
     }
 

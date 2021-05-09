@@ -7,6 +7,7 @@ import dslabs.atmostonce.AMOResult;
 import dslabs.framework.Address;
 import dslabs.framework.Application;
 import dslabs.framework.Command;
+import dslabs.framework.Message;
 import dslabs.framework.Node;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -59,7 +60,7 @@ public class PaxosServer extends Node {
         this.log = new HashMap<>();
         slot_in = 1;
         slot_out = 1;
-        seqNum = 0;
+        seqNum = -1;
         ballot = new Ballot(seqNum, address);
         receivedPositiveP2BFrom = new HashMap<>();
         receivedNegativeP2BFrom = new HashMap<>();
@@ -263,11 +264,13 @@ public class PaxosServer extends Node {
     private void handleP1A(P1A m, Address sender) {
         if (ballot.compareTo(m.ballot()) < 0) {
             // ok!
+            System.out.println(address() + " is voting for " + sender);
             ballot = m.ballot();
             leader = false;
             send(new P1B(ballot, log), sender);
         } else {
             // nope!
+            System.out.println(address() + " is voting against " + sender);
             send(new P1B(null, null), sender);
         }
     }
@@ -281,22 +284,16 @@ public class PaxosServer extends Node {
         } else {
             if (m.ballot().compareTo(ballot) == 0) {
                 receivedPositiveP1BFrom.add(sender);
-                for (Integer slot_num : m.log().keySet()) {
-                    if (m.log().get(slot_num).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
-                        log.put(slot_num, m.log().get(slot_num));
-                    } else if (!log.containsKey(slot_num) || log.get(slot_num).ballot.compareTo(m.log().get(slot_num).ballot) < 0) {
-                        log.put(slot_num, new LogEntry(m.log().get(slot_num).ballot, PaxosLogSlotStatus.ACCEPTED, m.log().get(slot_num).command));
-                    }
-                }
+                mergeLog(m.log());
             }
         }
 
-        if (log.keySet().size() > 0) {
-            slot_in = Math.max(Collections.max(log.keySet()) + 1, slot_in);
-        }
+        updateSlotIn();
+        System.out.println("There are " + servers.length + " servers");
 
         // -------leader has been elected----------
         if (receivedPositiveP1BFrom.size() >= servers.length / 2) {
+            System.out.println(address() + " is the leader!");
             leader = true;
             executeChosen();
             // Send out phase 2 (P2A) messages for all values that have been accepted already
@@ -333,10 +330,9 @@ public class PaxosServer extends Node {
         if (!leader) {
             heartbeatReceivedThisInterval = true;
             if (!Objects.equals(log, m.log())) {
-                log = m.log();
-                slot_out = m.slot_out();
-                slot_in = m.slot_in();
-                executeChosen();
+                mergeLog(m.log());
+                updateSlotIn();
+                executeChosen(); // will update slot_out
             }
         }
     }
@@ -400,11 +396,30 @@ public class PaxosServer extends Node {
     }
 
     private void startLeaderElection() {
+        seqNum++;
+        ballot = new Ballot(seqNum, address());
         for (Address otherServer : servers) {
             if (!Objects.equals(address(), otherServer)) {
                 send(new P1A(ballot), otherServer);
                 // Q1: no P1A timer
             }
+        }
+    }
+
+    // To merge the current log with the incoming log
+    private void mergeLog(HashMap<Integer, LogEntry> other) {
+        for (Integer slot_num : other.keySet()) {
+            if (other.get(slot_num).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
+                log.put(slot_num, other.get(slot_num));
+            } else if (!log.containsKey(slot_num) || log.get(slot_num).ballot.compareTo(other.get(slot_num).ballot) < 0) {
+                log.put(slot_num, new LogEntry(other.get(slot_num).ballot, PaxosLogSlotStatus.ACCEPTED, other.get(slot_num).command));
+            }
+        }
+    }
+
+    private void updateSlotIn() {
+        if (log.keySet().size() > 0) {
+            slot_in = Math.max(Collections.max(log.keySet()) + 1, slot_in);
         }
     }
 

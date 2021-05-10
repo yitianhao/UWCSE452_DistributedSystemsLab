@@ -2,7 +2,6 @@ package dslabs.paxos;
 
 import dslabs.atmostonce.AMOCommand;
 import dslabs.framework.Message;
-import dslabs.paxos.PaxosServer.AcceptedEntry;
 import dslabs.paxos.PaxosServer.Ballot;
 import dslabs.paxos.PaxosServer.LogEntry;
 import java.util.HashMap;

@@ -23,7 +23,6 @@ Heartbeats
 Catch-up mechanism
 Garbage collectio
 
+only update slot_in when the the server becomes a leader
 
-map
-clientID->client request seqNum
-1->1
+We recommend that candidates just keep retrying with the same ballot number until they succeed or become a follower.

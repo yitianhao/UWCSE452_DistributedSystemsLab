@@ -49,8 +49,8 @@ public final class PaxosClient extends Node implements Client {
 
         for (Address server : servers) {
             this.send(new PaxosRequest(command), server);
-            this.set(new ClientTimer(command), CLIENT_RETRY_MILLIS);
         }
+        this.set(new ClientTimer(command), CLIENT_RETRY_MILLIS);
     }
 
     @Override
@@ -75,9 +75,12 @@ public final class PaxosClient extends Node implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void handlePaxosReply(PaxosReply m, Address sender) {
         // Your code here...
+        //System.out.println("!!!!!");
         if (m != null && m.result() != null && seqNum == m.result().sequenceNum()) {
             paxosReply = m;
             notify();
+        } else {
+            //System.out.println("my seqNum = " + seqNum + " | incoming seqNum = " + m.result().sequenceNum());
         }
     }
 
@@ -89,8 +92,8 @@ public final class PaxosClient extends Node implements Client {
         if (seqNum == t.command().sequenceNum() && paxosReply == null) {
             for (Address server : servers) {
                 this.send(new PaxosRequest(t.command()), server);
-                this.set(t, CLIENT_RETRY_MILLIS);
             }
+            this.set(t, CLIENT_RETRY_MILLIS);
         }
     }
 }

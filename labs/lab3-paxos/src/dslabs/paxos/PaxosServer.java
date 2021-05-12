@@ -41,6 +41,7 @@ public class PaxosServer extends Node {
     private HashSet<Address> receivedPositiveP1BFrom;
     //private HashSet<Address> receivedNegativeP1BFrom;
     private Address lastLeader;
+    private Ballot highestBallotSeen;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -62,6 +63,7 @@ public class PaxosServer extends Node {
         //receivedNegativeP1BFrom = new HashSet<>();
         clientRequests = new HashMap<>();
         lastLeader = null;
+        highestBallotSeen = ballot;
     }
 
 
@@ -206,7 +208,10 @@ public class PaxosServer extends Node {
     // ---------------leader--------------
     private void handleP2B(P2B m, Address sender) {
         if (leader) {
-            if (!checkLeaderValidity(m.ballot())) return;
+            if (!checkLeaderValidity(m.ballot())) {
+                //System.out.println(address() + " is not more leader ");
+                return;
+            }
             HashSet<Address> addresses = receivedPositiveP2BFrom.getOrDefault(m.slotNum(), new HashSet<>());
             addresses.add(sender);
             receivedPositiveP2BFrom.put(m.slotNum(), addresses);
@@ -235,7 +240,6 @@ public class PaxosServer extends Node {
     // --------potential leader--------
     // update based on section slides p63
     private void handleP1B(P1B m, Address sender) {
-        if (!checkLeaderValidity(m.ballot())) return;
         if (m.ballot().compareTo(ballot) == 0) {
             receivedPositiveP1BFrom.add(sender);
             mergeLog(m.log());
@@ -249,6 +253,7 @@ public class PaxosServer extends Node {
                 receivedPositiveP2BFrom = new HashMap<>();
                 seqNum++;
                 ballot = new Ballot(seqNum, address());
+                //System.out.println("***Ballot = " + ballot.seqNum);
                 updateSlotIn();
                 executeChosen();
                 //System.out.println("slotIN = " + slot_in + " | slotOUT = " + slot_out);
@@ -257,14 +262,10 @@ public class PaxosServer extends Node {
                     if (!Objects.equals(address(), otherServer)) {
                         for (int i = slot_out; i < slot_in; i++) {
                             //System.out.println("sending out P2A " + i);
-                            if (log.containsKey(i) && log.get(i).paxosLogSlotStatus ==
-                                    PaxosLogSlotStatus.ACCEPTED) {
-                                send(new P2A(ballot, i, log.get(i).command),
-                                        otherServer);
+                            if (log.containsKey(i) && log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.ACCEPTED) {
+                                send(new P2A(ballot, i, log.get(i).command), otherServer);
                                 set(new P2ATimer(i, otherServer, log.get(i).command), P2A_RETRY_TIMER);
-                            } else if (log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
-                                //System.out.println(i + " is chosen");
-                            } else { // holes
+                            } else if (log.get(i).command == null){ // holes
                                 send(new P2A(ballot, i, null), otherServer);
                                 set(new P2ATimer(i, otherServer, null), P2A_RETRY_TIMER);
                             }
@@ -286,11 +287,13 @@ public class PaxosServer extends Node {
     // ---------acceptors---------
     private void handleHeartbeat(Heartbeat m, Address sender) {
         if (!leader) {
+            if (m.ballot().compareTo(ballot) > 0) return;
             if (!Objects.equals(lastLeader, sender)) {
                 this.set(new HeartbeatCheckTimer(), HEARTBEAT_CHECK_MILLIS);
                 seqNum++;
                 ballot = new Ballot(seqNum, address());
             }
+            //System.out.println("acceptor = " + address() + " | ballot = " + ballot.seqNum);
             lastLeader = sender;
             heartbeatReceivedThisInterval = true;
             //System.out.println("-----now leader is : " + sender);
@@ -342,7 +345,7 @@ public class PaxosServer extends Node {
                 this.set(t, HEARTBEAT_CHECK_MILLIS);
             } else {
                 // try to be leader
-                // System.out.println("leader " + lastLeader + " is dead; " + address() + "starting election");
+                 //System.out.println("leader " + lastLeader + " is dead; " + address() + "starting election");
                 startLeaderElection();
             }
         }
@@ -361,8 +364,11 @@ public class PaxosServer extends Node {
             AMOCommand command = log.get(i).command;
             if (command != null) {  // in the case of no-op
                 AMOResult result = application.execute(command);
-                //System.out.println(address() + ": result " + result.toString());
+                //System.out.println("!!!slot  = " + i + " | client = " + command.clientID() + " | seqNum = " + command.sequenceNum());
                 send(new PaxosReply(result), command.clientID());
+                //System.out.println("send to " + command.clientID().toString());
+            } else {
+                //System.out.println("holes!");
             }
             i++;
         }
@@ -384,13 +390,22 @@ public class PaxosServer extends Node {
         for (Integer slot_num : other.keySet()) {
             //System.out.print("slot = " + slot_num + " | ");
             if (other.get(slot_num).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
-                log.put(slot_num, other.get(slot_num));
+                log.put(slot_num, new LogEntry(other.get(slot_num).ballot, PaxosLogSlotStatus.CHOSEN, other.get(slot_num).command));
                 clientRequests.put(other.get(slot_num).command.clientID(), other.get(slot_num).command.sequenceNum());
                 //System.out.println(" been chosen");
             } else if (!log.containsKey(slot_num) || log.get(slot_num).ballot.compareTo(other.get(slot_num).ballot) < 0) {
                 log.put(slot_num, new LogEntry(other.get(slot_num).ballot, PaxosLogSlotStatus.ACCEPTED, other.get(slot_num).command));
                 //System.out.println(" been accepted");
                 clientRequests.put(other.get(slot_num).command.clientID(), other.get(slot_num).command.sequenceNum());
+            }
+        }
+
+        if (log.keySet().size() > 0) {
+            for (int i = slot_out; i < Collections.max(log.keySet()); i++) {
+                if (!log.keySet().contains(i)) { // holes
+                    //System.out.println("filling holes");
+                    log.put(i, new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, null));
+                }
             }
         }
     }

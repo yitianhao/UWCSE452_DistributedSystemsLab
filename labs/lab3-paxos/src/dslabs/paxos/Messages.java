@@ -12,8 +12,8 @@ import lombok.Data;
 class P2A implements Message {
     // P2A message should contain (ballot, slot number, command)
     private final Ballot ballot;
-    private final Integer slotNum;
     private final AMOCommand command;
+    private final int slotNum;
 }
 
 @Data
@@ -26,6 +26,4 @@ class P2B implements Message {
 @Data
 class Heartbeat implements Message {
     private final HashMap<Integer, LogEntry> log;
-    private final int slot_out;
-    private final int slot_in;
 }

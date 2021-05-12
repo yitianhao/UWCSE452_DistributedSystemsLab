@@ -18,7 +18,6 @@ final class ClientTimer implements Timer {
 final class P2ATimer implements Timer {
     static final int P2A_RETRY_TIMER = 50;
     private final Integer slotNum;
-    private final Address acceptor;
     private final AMOCommand command;
 }
 

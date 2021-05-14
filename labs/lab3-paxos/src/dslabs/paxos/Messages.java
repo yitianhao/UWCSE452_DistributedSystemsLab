@@ -22,8 +22,19 @@ class P2B implements Message {
     private final Integer slotNum;
 }
 
-
 @Data
 class Heartbeat implements Message {
+    private final HashMap<Integer, LogEntry> log;
+    private final Ballot ballot;
+}
+
+@Data
+class P1A implements Message {
+    private final Ballot ballot;
+}
+
+@Data
+class P1B implements Message {
+    private final Ballot ballot;
     private final HashMap<Integer, LogEntry> log;
 }

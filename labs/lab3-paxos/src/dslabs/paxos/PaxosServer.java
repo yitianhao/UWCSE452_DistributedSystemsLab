@@ -8,22 +8,18 @@ import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Message;
 import dslabs.framework.Node;
-import dslabs.framework.Result;
 import java.io.Serializable;
-import java.nio.file.ReadOnlyFileSystemException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Objects;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
-import org.checkerframework.checker.units.qual.C;
 
+import static dslabs.paxos.HeartbeatCheckTimer.HEARTBEAT_CHECK_MILLIS;
 import static dslabs.paxos.HeartbeatTimer.HEARTBEAT_MILLIS;
+import static dslabs.paxos.P1ATimer.P1A_RETRY_TIMER;
 import static dslabs.paxos.P2ATimer.P2A_RETRY_TIMER;
-import static java.lang.Integer.parseInt;
-
 
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
@@ -41,6 +37,9 @@ public class PaxosServer extends Node {
     private HashMap<Integer, HashSet<Address>> receivedP2BFrom;
     private HashMap<Address, ClientReqEntry> clientRequests;
     private boolean heartbeatReceivedThisInterval;
+    private HashSet<Address> receivedPositiveP1BFrom;
+    private boolean stopP1ATimer;
+    private Address lastLeader;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -58,36 +57,43 @@ public class PaxosServer extends Node {
         ballot = new Ballot(seqNum, address);
         receivedP2BFrom = new HashMap<>();
         clientRequests = new HashMap<>();
+        stopP1ATimer = false;
+        lastLeader = null;
     }
 
 
     @Override
     public void init() {
         // Your code here...
-        Address max = servers[0];
-        //System.out.println("max is "+max);
-        for (Address a: servers) {
-            if (a.compareTo(max) > 0) {
-                max = a;
-            }
-        }
-        //System.out.println("max is "+max);
-        if (Objects.equals(address(), max)) {
-            //System.out.println("leader = " + address());
+//        Address max = servers[0];
+//        //System.out.println("max is "+max);
+//        for (Address a: servers) {
+//            if (a.compareTo(max) > 0) {
+//                max = a;
+//            }
+//        }
+//        //System.out.println("max is "+max);
+//        if (Objects.equals(address(), max)) {
+//            //System.out.println("leader = " + address());
+//            leader = true;
+//            ballot = new Ballot(seqNum, max);
+//            //System.out.println("max is "+max);
+//        } else {
+//            leader = false;
+//            ballot = new Ballot(seqNum, max);
+//        }
+//
+//
+//        for (Address otherServer : servers) {
+//            if (!Objects.equals(address(), otherServer)) {
+//                this.send(new Heartbeat(log), otherServer);
+//                this.set(new HeartbeatTimer(otherServer), HEARTBEAT_MILLIS);
+//            }
+//        }
+        if (servers.length == 1) {
             leader = true;
-            ballot = new Ballot(seqNum, max);
-            //System.out.println("max is "+max);
         } else {
-            leader = false;
-            ballot = new Ballot(seqNum, max);
-        }
-
-
-        for (Address otherServer : servers) {
-            if (!Objects.equals(address(), otherServer)) {
-                this.send(new Heartbeat(log), otherServer);
-                this.set(new HeartbeatTimer(otherServer), HEARTBEAT_MILLIS);
-            }
+            startLeaderElection();
         }
     }
 
@@ -225,7 +231,7 @@ public class PaxosServer extends Node {
         // which means the acceptor considers the sender to be the current leader
         //System.out.println("leader: " + ballot.toString() + " | acceptor: " + m.ballot().toString());
         if (!leader) {
-            if (m.ballot().compareTo(ballot) == 0) {
+            if (m.ballot().compareTo(ballot) >= 0) {
                 ballot = m.ballot();
                 log.put(m.slotNum(), new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, m.command(), null));
                 send(new P2B(ballot, m.slotNum()), sender);
@@ -236,6 +242,7 @@ public class PaxosServer extends Node {
     // ---------------leader--------------
     private void handleP2B(P2B m, Address sender) {
         if (leader) {
+            checkLeaderValidity(m.ballot());
             HashSet<Address> addresses = receivedP2BFrom.getOrDefault(m.slotNum(), new HashSet<>());
             addresses.add(sender);
             receivedP2BFrom.put(m.slotNum(), addresses);
@@ -248,12 +255,55 @@ public class PaxosServer extends Node {
         }
     }
 
+    // ---------acceptors---------
     private void handleHeartbeat(Heartbeat m, Address sender) {
         if (!leader) {
+            if (!Objects.equals(lastLeader, sender)) {
+                this.set(new HeartbeatCheckTimer(), HEARTBEAT_CHECK_MILLIS);
+            }
+            if (m.ballot().compareTo(ballot) > 0) {
+                ballot = m.ballot();
+            }
+            lastLeader = sender;
             heartbeatReceivedThisInterval = true;
             mergeLog(m.log());
             updateSlotIn();
             executeChosen();
+        }
+    }
+
+    // ---------potential acceptors--------
+    private void handleP1A(P1A m, Address sender) {
+        if (m.ballot().compareTo(ballot) > 0) {
+            //System.out.println(address() + "'s ballot = " + ballot.toString() + " | P1A's ballot = " + m.ballot().toString());
+            ballot = m.ballot();
+            leader = false;
+            send(new P1B(ballot, log), sender);
+        }
+    }
+
+    // --------potential leader--------
+    private void handleP1B(P1B m, Address sender) {
+        if (m.ballot().compareTo(ballot) > 0) {
+            ballot = m.ballot();
+            stopP1ATimer = true;
+            return;
+        }
+        else if (m.ballot().compareTo(ballot) < 0) return;
+
+        receivedPositiveP1BFrom.add(sender);
+        mergeLog(m.log());
+
+        if (receivedPositiveP1BFrom.size() >= servers.length / 2) {
+            //System.out.println(address() + " = leader");
+            leader = true;
+            //seqNum++;
+            //ballot = new Ballot(seqNum, address());
+            updateSlotIn();
+            executeChosen();
+            receivedP2BFrom = new HashMap<>();
+            sendAcceptedP2A();
+            beginHeartNeat();
         }
     }
 
@@ -270,13 +320,37 @@ public class PaxosServer extends Node {
         }
     }
 
+    private void onP1ATimer(P1ATimer t) {
+        // unless one of the following 3 cases, keep trying
+        if (!(receivedPositiveP1BFrom.contains(t.acceptor()) || // A. I received your response
+            leader || // B. I am the leader
+            stopP1ATimer)) { // C. I get a message with higher ballot
+            send(new P1A(t.ballot()), t.acceptor());
+            set(t, P1A_RETRY_TIMER);
+        }
+    }
+
     private void onHeartbeatTimer(HeartbeatTimer t) {
         // Your code here...
-        if (leader) {
-            this.send(new Heartbeat(log), t.acceptor());
+        if (leader && ballot.compareTo(t.ballot()) == 0) {
+            this.send(new Heartbeat(log, ballot), t.acceptor());
             this.set(t, HEARTBEAT_MILLIS);
         }
     }
+
+    private void onHeartbeatCheckTimer(HeartbeatCheckTimer t) {
+        if (!leader) {
+            if (heartbeatReceivedThisInterval) {
+                heartbeatReceivedThisInterval = false;
+                this.set(t, HEARTBEAT_CHECK_MILLIS);
+            } else {
+                // try to be leader
+                //System.out.println("leader " + lastLeader + " is dead; " + address() + "starting election");
+                startLeaderElection();
+            }
+        }
+    }
+
 
     /* -------------------------------------------------------------------------
         Utils
@@ -310,15 +384,18 @@ public class PaxosServer extends Node {
         slot_out = i;
     }
 
-//    private void startLeaderElection() {
-//        receivedPositiveP1BFrom = new HashSet<>();
-//        for (Address otherServer : servers) {
-//            if (!Objects.equals(address(), otherServer)) {
-//                send(new P1A(ballot), otherServer);
-//                set(new P1ATimer(otherServer), P1A_RETRY_TIMER);
-//            }
-//        }
-//    }
+    private void startLeaderElection() {
+        seqNum++;
+        ballot = new Ballot(seqNum, address());
+        stopP1ATimer = false;
+        receivedPositiveP1BFrom = new HashSet<>();
+        for (Address otherServer : servers) {
+            if (!Objects.equals(address(), otherServer)) {
+                send(new P1A(ballot), otherServer);
+                set(new P1ATimer(otherServer, ballot), P1A_RETRY_TIMER);
+            }
+        }
+    }
 
     // To merge the current log with the incoming log
     private void mergeLog(HashMap<Integer, LogEntry> other) {
@@ -357,6 +434,32 @@ public class PaxosServer extends Node {
             return false;
         }
         return true;
+    }
+
+    private void sendAcceptedP2A() {
+        for (Address otherServer : servers) {
+            if (!Objects.equals(address(), otherServer)) {
+                for (int i = slot_out; i < slot_in; i++) {
+                    //System.out.println("sending out P2A " + i);
+                    if (log.containsKey(i) && log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.ACCEPTED) {
+                        send(new P2A(ballot, log.get(i).command, i), otherServer);
+                        set(new P2ATimer(i, log.get(i).command), P2A_RETRY_TIMER);
+                    } else if (log.get(i).command == null){ // holes
+                        send(new P2A(ballot, null, i), otherServer);
+                        set(new P2ATimer(i, null), P2A_RETRY_TIMER);
+                    }
+                }
+            }
+        }
+    }
+
+    private void beginHeartNeat() {
+        for (Address otherServer : servers) {
+            if (!Objects.equals(address(), otherServer)) {
+                this.send(new Heartbeat(log, ballot), otherServer);
+                this.set(new HeartbeatTimer(otherServer, ballot), HEARTBEAT_MILLIS);
+            }
+        }
     }
 
 
@@ -419,7 +522,12 @@ public class PaxosServer extends Node {
 
         @Override
         public String toString() {
-            return "Ballot=" + ballot.toString() + "Status=" + paxosLogSlotStatus.toString() + "Command" + command.toString() + "Result" + result.toString();
+            String command = null;
+            if (this.command != null) command = this.command.toString();
+            String res = null;
+            if (this.result != null) res = this.result.toString();
+
+            return "Ballot=" + ballot.toString() + "Status=" + paxosLogSlotStatus.toString() + "Command" + command + "Result" + res;
         }
 
         @Override

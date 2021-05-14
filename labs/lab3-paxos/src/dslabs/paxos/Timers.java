@@ -3,6 +3,7 @@ package dslabs.paxos;
 import dslabs.atmostonce.AMOCommand;
 import dslabs.framework.Address;
 import dslabs.framework.Timer;
+import dslabs.paxos.PaxosServer.Ballot;
 import lombok.Data;
 
 @Data
@@ -21,6 +22,13 @@ final class P2ATimer implements Timer {
     private final AMOCommand command;
 }
 
+@Data
+final class P1ATimer implements Timer {
+    static final int P1A_RETRY_TIMER = 25;
+    private final Address acceptor;
+    private final Ballot ballot;
+}
+
 
 @Data
 final class HeartbeatCheckTimer implements Timer {
@@ -31,4 +39,5 @@ final class HeartbeatCheckTimer implements Timer {
 final class HeartbeatTimer implements Timer {
     static final int HEARTBEAT_MILLIS = 25;
     private final Address acceptor;
+    private final Ballot ballot;
 }

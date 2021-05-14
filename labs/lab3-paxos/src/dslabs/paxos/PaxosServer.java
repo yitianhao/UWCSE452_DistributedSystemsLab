@@ -89,12 +89,14 @@ public class PaxosServer extends Node {
 //                this.set(new HeartbeatTimer(otherServer), HEARTBEAT_MILLIS);
 //            }
 //        }
-        if (servers.length == 1) {
-            leader = true;
-        } else {
-            startLeaderElection();
-        }
-        this.set(new HeartbeatCheckTimer(), HEARTBEAT_CHECK_MILLIS);
+//        if (servers.length == 1) {
+//            leader = true;
+//        } else {
+//            startLeaderElection();
+//        }
+//        this.set(new HeartbeatCheckTimer(), HEARTBEAT_CHECK_MILLIS);
+
+        onHeartbeatCheckTimer(new HeartbeatCheckTimer());
     }
 
     /* -------------------------------------------------------------------------
@@ -205,7 +207,7 @@ public class PaxosServer extends Node {
                 LogEntry logEntry = new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, m.amoCommand(), null);
                 log.put(slot_in, logEntry);
                 sendMsgExceptSelf(new P2A(ballot, m.amoCommand(), slot_in));
-                set(new P2ATimer(slot_in, m.amoCommand()), P2A_RETRY_TIMER);
+                set(new P2ATimer(slot_in, m.amoCommand(), ballot), P2A_RETRY_TIMER);
             }
             clientRequests.put(sender, new ClientReqEntry(m.amoCommand().sequenceNum(), slot_in));
             updateSlotIn();
@@ -263,6 +265,7 @@ public class PaxosServer extends Node {
             } else {
                 return;
             }
+            //if (checkLeaderValidity(m.ballot())) return;
         }
         if (m.ballot().compareTo(ballot) > 0) {
             ballot = m.ballot();
@@ -316,7 +319,7 @@ public class PaxosServer extends Node {
     private void onP2ATimer(P2ATimer t) {
         if (!receivedP2BFrom.containsKey(t.slotNum()) ||
                 !(receivedP2BFrom.get(t.slotNum()).size() >= servers.length / 2)) {
-            sendMsgExceptSelf(new P2A(ballot, t.command(), t.slotNum()));
+            sendMsgExceptSelf(new P2A(t.ballot(), t.command(), t.slotNum()));
             set(t, P2A_RETRY_TIMER);
         }
     }
@@ -347,7 +350,11 @@ public class PaxosServer extends Node {
             } else {
                 // try to be leader
                 //System.out.println("leader " + lastLeader + " is dead; " + address() + "starting election");
-                startLeaderElection();
+                if (servers.length == 1) {
+                    leader = true;
+                } else {
+                    startLeaderElection();
+                }
             }
         }
     }
@@ -450,10 +457,10 @@ public class PaxosServer extends Node {
                     //System.out.println("sending out P2A " + i);
                     if (log.containsKey(i) && log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.ACCEPTED) {
                         send(new P2A(ballot, log.get(i).command, i), otherServer);
-                        set(new P2ATimer(i, log.get(i).command), P2A_RETRY_TIMER);
+                        set(new P2ATimer(i, log.get(i).command, log.get(i).ballot), P2A_RETRY_TIMER);
                     } else if (log.get(i).command == null){ // holes
                         send(new P2A(ballot, null, i), otherServer);
-                        set(new P2ATimer(i, null), P2A_RETRY_TIMER);
+                        set(new P2ATimer(i, null, log.get(i).ballot), P2A_RETRY_TIMER);
                     }
                 }
             }

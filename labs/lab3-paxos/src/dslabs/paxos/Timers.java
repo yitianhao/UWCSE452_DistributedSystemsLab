@@ -20,6 +20,7 @@ final class P2ATimer implements Timer {
     static final int P2A_RETRY_TIMER = 50;
     private final Integer slotNum;
     private final AMOCommand command;
+    private final Ballot ballot;
 }
 
 @Data

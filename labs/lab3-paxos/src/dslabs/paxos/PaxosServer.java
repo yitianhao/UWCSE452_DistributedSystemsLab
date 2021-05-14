@@ -404,12 +404,18 @@ public class PaxosServer extends Node {
             //System.out.print("slot = " + slot_num + " | ");
             if (other.get(slot_num).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
                 log.put(slot_num, new LogEntry(other.get(slot_num).ballot, PaxosLogSlotStatus.CHOSEN, other.get(slot_num).command, null));
-                clientRequests.put(other.get(slot_num).command.clientID(), new ClientReqEntry(other.get(slot_num).command.sequenceNum(), slot_num));
+                if (other.get(slot_num).command != null) {
+                    clientRequests.put(other.get(slot_num).command.clientID(),
+                            new ClientReqEntry(other.get(slot_num).command.sequenceNum(), slot_num));
+                }
                 //System.out.println(" been chosen");
-            } else if (!log.containsKey(slot_num) || log.get(slot_num).ballot.compareTo(other.get(slot_num).ballot) < 0) {
+            } else if (!log.containsKey(slot_num) || (log.containsKey(slot_num) && log.get(slot_num).ballot.compareTo(other.get(slot_num).ballot) < 0)) {
                 log.put(slot_num, new LogEntry(other.get(slot_num).ballot, PaxosLogSlotStatus.ACCEPTED, other.get(slot_num).command, null));
                 //System.out.println(" been accepted");
-                clientRequests.put(other.get(slot_num).command.clientID(), new ClientReqEntry(other.get(slot_num).command.sequenceNum(), slot_num));
+                if (other.get(slot_num).command != null) {
+                    clientRequests.put(other.get(slot_num).command.clientID(),
+                            new ClientReqEntry(other.get(slot_num).command.sequenceNum(), slot_num));
+                }
             }
         }
 

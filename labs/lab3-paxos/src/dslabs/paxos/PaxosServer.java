@@ -39,7 +39,7 @@ public class PaxosServer extends Node {
     private boolean heartbeatReceivedThisInterval;
     private HashSet<Address> receivedPositiveP1BFrom;
     private boolean stopP1ATimer;
-    private Address lastLeader;
+    //private Address lastLeader;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -58,7 +58,6 @@ public class PaxosServer extends Node {
         receivedP2BFrom = new HashMap<>();
         clientRequests = new HashMap<>();
         stopP1ATimer = false;
-        lastLeader = null;
     }
 
 
@@ -95,6 +94,7 @@ public class PaxosServer extends Node {
         } else {
             startLeaderElection();
         }
+        this.set(new HeartbeatCheckTimer(), HEARTBEAT_CHECK_MILLIS);
     }
 
     /* -------------------------------------------------------------------------
@@ -257,19 +257,20 @@ public class PaxosServer extends Node {
 
     // ---------acceptors---------
     private void handleHeartbeat(Heartbeat m, Address sender) {
-        if (!leader) {
-            if (!Objects.equals(lastLeader, sender)) {
-                this.set(new HeartbeatCheckTimer(), HEARTBEAT_CHECK_MILLIS);
-            }
+        if (leader) {
             if (m.ballot().compareTo(ballot) > 0) {
-                ballot = m.ballot();
+                leader = false;
+            } else {
+                return;
             }
-            lastLeader = sender;
-            heartbeatReceivedThisInterval = true;
-            mergeLog(m.log());
-            updateSlotIn();
-            executeChosen();
         }
+        if (m.ballot().compareTo(ballot) > 0) {
+            ballot = m.ballot();
+        }
+        heartbeatReceivedThisInterval = true;
+        mergeLog(m.log());
+        updateSlotIn();
+        executeChosen();
     }
 
     // ---------potential acceptors--------
@@ -303,7 +304,7 @@ public class PaxosServer extends Node {
             executeChosen();
             receivedP2BFrom = new HashMap<>();
             sendAcceptedP2A();
-            beginHeartNeat();
+            beginHeartbeat();
         }
     }
 
@@ -453,7 +454,7 @@ public class PaxosServer extends Node {
         }
     }
 
-    private void beginHeartNeat() {
+    private void beginHeartbeat() {
         for (Address otherServer : servers) {
             if (!Objects.equals(address(), otherServer)) {
                 this.send(new Heartbeat(log, ballot), otherServer);

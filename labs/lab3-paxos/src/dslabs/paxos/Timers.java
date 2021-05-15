@@ -33,7 +33,7 @@ final class P1ATimer implements Timer {
 
 @Data
 final class HeartbeatCheckTimer implements Timer {
-    static final int HEARTBEAT_CHECK_MILLIS = 100;
+    static final int HEARTBEAT_CHECK_MILLIS = 300;
 }
 
 @Data

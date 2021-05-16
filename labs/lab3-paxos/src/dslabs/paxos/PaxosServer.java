@@ -385,7 +385,7 @@ public class PaxosServer extends Node {
 
     private void executeChosen() {
         int i = slot_out;
-        while (log.containsKey(i) && log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
+        while (log.containsKey(i) && chosen(log, i)) {
             //System.out.println(i + " is chosen, executing.... ");
             AMOCommand command = log.get(i).command;
             if (command != null) {  // in the case of no-op
@@ -424,11 +424,11 @@ public class PaxosServer extends Node {
     private void mergeLog(HashMap<Integer, LogEntry> other) {
         int maxSlotNum = Math.max(log.keySet().size() > 0 ? Collections.max(log.keySet()) : 0, other.keySet().size() > 0 ? Collections.max(other.keySet()) : 0);
         for (int i = slot_out; i <= maxSlotNum; i++) {
-            if (other.containsKey(i) && other.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.CHOSEN) {
-                if (!log.containsKey(i) || log.get(i).paxosLogSlotStatus != PaxosLogSlotStatus.CHOSEN) {
+            if (other.containsKey(i) && chosen(other, i)) {
+                if (!log.containsKey(i) || !chosen(log, i)) {
                     log.put(i, new LogEntry(other.get(i).ballot, PaxosLogSlotStatus.CHOSEN, other.get(i).command, null));
                 }
-            } else if (other.containsKey(i) && other.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.ACCEPTED) {
+            } else if (other.containsKey(i) && accepted(other, i)) {
                 if (!log.containsKey(i) || (Objects.equals(log.get(i).command, other.get(i).command) && log.get(i).ballot.compareTo(other.get(i).ballot) < 0)) {
                     log.put(i, new LogEntry(other.get(i).ballot, PaxosLogSlotStatus.ACCEPTED, other.get(i).command, null));
                 }

@@ -506,18 +506,14 @@ public class PaxosServer extends Node {
     }
 
     private void sendAcceptedP2A() {
-        for (Address otherServer : servers) {
-            if (!Objects.equals(address(), otherServer)) {
-                for (int i = slot_out; i < slot_in; i++) {
-                    //System.out.println("sending out P2A " + i);
-                    if (log.containsKey(i) && log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.ACCEPTED) {
-                        send(new P2A(ballot, log.get(i).command, i), otherServer);
-                        set(new P2ATimer(i, log.get(i).command, log.get(i).ballot), P2A_RETRY_TIMER);
-                    } else if (log.get(i).command == null){ // holes
-                        send(new P2A(ballot, null, i), otherServer);
-                        set(new P2ATimer(i, null, log.get(i).ballot), P2A_RETRY_TIMER);
-                    }
-                }
+        for (int i = slot_out; i < slot_in; i++) {
+            //System.out.println("sending out P2A " + i);
+            if (log.containsKey(i) && log.get(i).paxosLogSlotStatus == PaxosLogSlotStatus.ACCEPTED) {
+                sendMsgExceptSelf(new P2A(ballot, log.get(i).command, i));
+                set(new P2ATimer(i, log.get(i).command, log.get(i).ballot), P2A_RETRY_TIMER);
+            } else if (log.get(i).command == null){ // holes
+                sendMsgExceptSelf(new P2A(ballot, null, i));
+                set(new P2ATimer(i, null, log.get(i).ballot), P2A_RETRY_TIMER);
             }
         }
     }

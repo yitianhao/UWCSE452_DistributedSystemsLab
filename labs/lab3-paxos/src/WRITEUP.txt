@@ -16,14 +16,11 @@ Development timeline:
   Make sure executions are happening in order (starting from slot_out and don’t skip slots) and progress can be made for clients
 
 
-Leader election/Prepares messages/timers (P1As, P1Bs)
-Start leader election at the very start
-Check if leader is alive
-Heartbeats
-Catch-up mechanism
-Garbage collectio
+1. Two types of mergeLog
+       (P1B merge won’t decide no-op; leader merge ref. https://edstem.org/us/courses/4921/discussion/410869
+2. Decide when the leader is elected:
+        add lastLeader (now leader is elected, followers should reset checker timer)
+3. Followers shouldn’t try to start leader election too early
+        only when "roleSettled", can increase ballot
+        P1A will use seqNum + address constructed ballot; rather than this.ballot(because this can be updated to higher ballot of another server during P1A)
 
-
-map
-clientID->client request seqNum
-1->1

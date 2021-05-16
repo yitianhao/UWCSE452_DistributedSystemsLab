@@ -39,6 +39,5 @@ final class HeartbeatCheckTimer implements Timer {
 @Data
 final class HeartbeatTimer implements Timer {
     static final int HEARTBEAT_MILLIS = 25;
-    private final Address acceptor;
     private final Ballot ballot;
 }

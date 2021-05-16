@@ -22,15 +22,13 @@ Previous updates:
 4. [ED https://edstem.org/us/courses/4921/discussion/437649] HeartbeatCheckTimer should be set at init for every server, reset when appropriate
 5. [OH] If I think I am the leader and I found the incoming message contains a higher ballot, I am not leader anymore
 6. [running --checks] Inner classes need @equals and @hashcode and optionally @toString (for debugging)
-
-
-
-May. 16 updates:
-1. [test24 viz] Two types of mergeLog
+7. [test14 log] Only leader has the right to reset P2ATimer
+8. [test14 log] when leader is settled, re-propose the accepted slots with own ballot
+9. [test24 viz] Two types of mergeLog
        (P1B merge won’t decide no-op; leader merge ref. https://edstem.org/us/courses/4921/discussion/410869
-2. [test24 viz] Decide when the leader is elected:
+10. [test24 viz] Decide when the leader is elected:
         add lastLeader (now leader is elected, followers should reset checker timer)
-3. [test24 viz] Followers shouldn’t try to start leader election too early
+11. [test24 viz] Followers shouldn’t try to start leader election too early
         only when "roleSettled", can increase ballot
         P1A will use seqNum + address constructed ballot; rather than this.ballot(because this can be updated to higher ballot of another server during P1A)
 

@@ -332,10 +332,12 @@ public class PaxosServer extends Node {
        -----------------------------------------------------------------------*/
     // Your code here...
     private void onP2ATimer(P2ATimer t) {
-        if (!receivedP2BFrom.containsKey(t.slotNum()) ||
-                !(receivedP2BFrom.get(t.slotNum()).size() >= servers.length / 2)) {
-            sendMsgExceptSelf(new P2A(t.ballot(), t.command(), t.slotNum()));
-            set(t, P2A_RETRY_TIMER);
+        if (leader) {
+            if (!receivedP2BFrom.containsKey(t.slotNum()) || !(receivedP2BFrom.get(t.slotNum()).size() >=
+                    servers.length / 2)) {
+                sendMsgExceptSelf(new P2A(t.ballot(), t.command(), t.slotNum()));
+                set(t, P2A_RETRY_TIMER);
+            }
         }
     }
 
@@ -445,12 +447,9 @@ public class PaxosServer extends Node {
                 LogEntry entry = otherLogChosen(i);
                 if (entry.ballot != null) {// some other log chosen this slot
                     log.put(i, entry);
-                } else { // nobody choose this slot
+                } else { // nobody choose this slot, re-proposing with current ballot
                     LogEntry entry1 = otherLogAcceptedHighest(i);
-                    if (entry1.command == null) { // other at least accepted
-                        entry1.ballot = ballot;  // hole, no-op
-                    }
-                    log.put(i, entry1);
+                    log.put(i, new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, entry1.command, null));
                 }
             }
         }
@@ -524,7 +523,7 @@ public class PaxosServer extends Node {
     }
 
     private void heardFromLeader(Ballot ballot, Address sender) {
-        if (ballot.compareTo(ballot) > 0) {
+        if (ballot.compareTo(this.ballot) > 0) {
             this.ballot = ballot;
         }
         heartbeatReceivedThisInterval = true;

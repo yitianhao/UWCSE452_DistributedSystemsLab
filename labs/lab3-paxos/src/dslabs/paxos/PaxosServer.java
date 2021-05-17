@@ -253,7 +253,7 @@ public class PaxosServer extends Node {
 
     // ---------------leader--------------
     private void handleP2B(P2B m, Address sender) {
-        if (leader) {
+        if (leader && !chosen(log, m.slotNum())) {
             checkLeaderValidity(m.ballot());
             HashSet<Address> addresses = receivedP2BFrom.getOrDefault(m.slotNum(), new HashSet<>());
             addresses.add(sender);
@@ -343,7 +343,7 @@ public class PaxosServer extends Node {
        -----------------------------------------------------------------------*/
     // Your code here...
     private void onP2ATimer(P2ATimer t) {
-        if (leader) {
+        if (leader && t.ballot().compareTo(ballot) == 0) {
             if (!receivedP2BFrom.containsKey(t.slotNum()) || !(receivedP2BFrom.get(t.slotNum()).size() >=
                     servers.length / 2)) {
                 sendMsgExceptSelf(new P2A(t.ballot(), t.command(), t.slotNum()));
@@ -376,7 +376,7 @@ public class PaxosServer extends Node {
             if (heartbeatReceivedThisInterval) {
                 heartbeatReceivedThisInterval = false;
                 this.set(t, HEARTBEAT_CHECK_MILLIS);
-            } else {
+            } else if (roleSettled) {
                 // try to be leader
                 //System.out.println("leader seems dead; " + address() + "starting election");
                 startLeaderElection();
@@ -431,10 +431,8 @@ public class PaxosServer extends Node {
     }
 
     private void startLeaderElection() {
-        if (roleSettled) {
-            seqNum = ballot.seqNum + 1;
-            ballot = new Ballot(seqNum, address());
-        }
+        seqNum = ballot.seqNum + 1;
+        ballot = new Ballot(seqNum, address());
         stopP1ATimer = false;
         receivedPositiveP1BFrom = new HashSet<>();
         receivedLogs = new HashSet<>();

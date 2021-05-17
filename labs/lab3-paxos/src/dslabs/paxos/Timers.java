@@ -26,7 +26,7 @@ final class P2ATimer implements Timer {
 @Data
 final class P1ATimer implements Timer {
     static final int P1A_RETRY_TIMER = 25;
-    private final Address acceptor;
+    //private final Address acceptor;
     private final Ballot ballot;
 }
 

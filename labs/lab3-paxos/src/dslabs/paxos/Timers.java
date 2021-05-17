@@ -30,10 +30,14 @@ final class P1ATimer implements Timer {
     private final Ballot ballot;
 }
 
-
 @Data
 final class HeartbeatCheckTimer implements Timer {
-    static final int HEARTBEAT_CHECK_MILLIS = 300;
+    static final int HEARTBEAT_CHECK_MILLIS = 200;
+}
+
+@Data
+final class HeartbeatReplyCheckTimer implements Timer {
+    static final int HEARTBEAT_REPLY_CHECK_MILLIS = 200;
 }
 
 @Data

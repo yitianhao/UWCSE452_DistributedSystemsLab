@@ -18,6 +18,7 @@ import lombok.ToString;
 import lombok.extern.java.Log;
 
 import static dslabs.paxos.HeartbeatCheckTimer.HEARTBEAT_CHECK_MILLIS;
+import static dslabs.paxos.HeartbeatReplyCheckTimer.HEARTBEAT_REPLY_CHECK_MILLIS;
 import static dslabs.paxos.HeartbeatTimer.HEARTBEAT_MILLIS;
 import static dslabs.paxos.P1ATimer.P1A_RETRY_TIMER;
 import static dslabs.paxos.P2ATimer.P2A_RETRY_TIMER;
@@ -44,6 +45,7 @@ public class PaxosServer extends Node {
     private HeartbeatCheckTimer timer;
     private boolean roleSettled;
     private HashSet<HashMap<Integer, LogEntry>> receivedLogs;
+    private boolean heartbeatReplyReceivedThisInterval;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -267,6 +269,7 @@ public class PaxosServer extends Node {
 
     // ---------acceptors---------
     private void handleHeartbeat(Heartbeat m, Address sender) {
+        //System.out.println(address().toString() + " with ballot = " + ballot + " received heartbeat from " + sender + " with ballot " + m.ballot());
         if (leader) {
             if (m.ballot().compareTo(ballot) > 0) {
                 leader = false;
@@ -280,10 +283,17 @@ public class PaxosServer extends Node {
         mergeLog(m.log());
         updateSlotIn();
         executeChosen();
+        send(new HeartbeatReply(), sender);
 //        System.out.println("leader: " + sender.toString() + " log ...");
 //        System.out.println(m.log().toString());
 //        System.out.println("acceptor " + address().toString() + " s log...");
 //        System.out.println(log);
+    }
+
+    private void handleHeartbeatReply(HeartbeatReply m, Address sender) {
+        if (leader) {
+            heartbeatReplyReceivedThisInterval = true;
+        }
     }
 
     // ---------potential acceptors--------
@@ -323,6 +333,7 @@ public class PaxosServer extends Node {
             receivedP2BFrom = new HashMap<>();
             sendAcceptedP2A();
             beginHeartbeat();
+            this.set(new HeartbeatReplyCheckTimer(), HEARTBEAT_REPLY_CHECK_MILLIS);
         }
     }
 
@@ -354,6 +365,7 @@ public class PaxosServer extends Node {
     private void onHeartbeatTimer(HeartbeatTimer t) {
         // Your code here...
         if (leader && ballot.compareTo(t.ballot()) == 0) {
+            //System.out.println(address().toString() + " is leader with ballot " + ballot.toString());
             sendMsgExceptSelf(new Heartbeat(log, ballot));
             this.set(t, HEARTBEAT_MILLIS);
         }
@@ -368,6 +380,19 @@ public class PaxosServer extends Node {
                 // try to be leader
                 //System.out.println("leader seems dead; " + address() + "starting election");
                 startLeaderElection();
+            }
+        }
+    }
+
+    private void onHeartbeatReplyCheckTimer(HeartbeatReplyCheckTimer t) {
+        if (leader) {
+            if (heartbeatReplyReceivedThisInterval) {
+                heartbeatReplyReceivedThisInterval = false;
+                this.set(t, HEARTBEAT_REPLY_CHECK_MILLIS);
+            } else {
+                // try to be leader
+                //System.out.println("leader seems dead; " + address() + "starting election");
+                leader = false;
             }
         }
     }

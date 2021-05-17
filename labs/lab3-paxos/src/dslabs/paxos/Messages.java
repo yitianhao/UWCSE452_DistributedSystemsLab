@@ -29,6 +29,11 @@ class Heartbeat implements Message {
 }
 
 @Data
+class HeartbeatReply implements Message {
+
+}
+
+@Data
 class P1A implements Message {
     private final Ballot ballot;
 }

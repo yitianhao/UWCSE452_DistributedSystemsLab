@@ -43,7 +43,7 @@ public class PaxosServer extends Node {
     private boolean stopP1ATimer;
     private Address lastLeader;
     private HeartbeatCheckTimer timer;
-    private boolean roleSettled;
+    //private boolean roleSettled;
     private HashSet<HashMap<Integer, LogEntry>> receivedLogs;
     private boolean heartbeatReplyReceivedThisInterval;
     private HashMap<Address, Integer> garbageCollection;
@@ -313,7 +313,7 @@ public class PaxosServer extends Node {
         if (receivedPositiveP1BFrom.size() >= servers.length / 2) {
             //System.out.println("--------- " + address() + " = leader ------------- ballot" + ballot.toString());
             leader = true;
-            roleSettled = true;
+            //roleSettled = true;
             mergeLog();
             updateSlotIn();
             executeChosen();
@@ -341,7 +341,7 @@ public class PaxosServer extends Node {
     }
 
     private void onP1ATimer(P1ATimer t) {
-        if (!(leader || stopP1ATimer || roleSettled) && ballot.compareTo(t.ballot()) == 0) {
+        if (!(leader || stopP1ATimer /*|| roleSettled*/) && ballot.compareTo(t.ballot()) == 0) {
             sendMsgExceptSelf(new P1A(t.ballot()));
             //System.out.println(address().toString()  + " is sending out P1A with ballot = " + t.ballot().toString());
             set(t, P1A_RETRY_TIMER);
@@ -362,7 +362,7 @@ public class PaxosServer extends Node {
             if (heartbeatReceivedThisInterval) {
                 heartbeatReceivedThisInterval = false;
                 this.set(t, HEARTBEAT_CHECK_MILLIS);
-            } else if (roleSettled) {
+            } else { //if (roleSettled) {
                 // try to be leader
                 //System.out.println("leader seems dead; " + address() + "starting election");
                 startLeaderElection();
@@ -422,7 +422,7 @@ public class PaxosServer extends Node {
         receivedLogs = new HashSet<>();
         sendMsgExceptSelf(new P1A(ballot));
         set(new P1ATimer(ballot), P1A_RETRY_TIMER);
-        roleSettled = false;
+        //roleSettled = false;
     }
 
     // To merge the current log with the incoming log
@@ -527,7 +527,7 @@ public class PaxosServer extends Node {
         }
         heartbeatReceivedThisInterval = true;
         if (!Objects.equals(lastLeader, sender)) {
-            roleSettled = true;
+            //roleSettled = true;
             //System.out.println(address() + " found: change leader from " + lastLeader.toString() + " to " + sender.toString());
             lastLeader = sender;
             onHeartbeatCheckTimer(timer);

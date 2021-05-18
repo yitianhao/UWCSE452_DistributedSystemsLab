@@ -238,7 +238,6 @@ public class PaxosServer extends Node {
     private void handleP2A(P2A m, Address sender) {
         // only accept it if the ballot in the message matches the acceptor’s ballot,
         // which means the acceptor considers the sender to be the current leader
-        stopP1ATimer = true;
         if (!leader) {
             if (m.ballot().compareTo(ballot) >= 0) {
                 heardFromLeader(m.ballot(), sender);
@@ -270,7 +269,6 @@ public class PaxosServer extends Node {
     // ---------acceptors---------
     private void handleHeartbeat(Heartbeat m, Address sender) {
         //System.out.println(address().toString() + " with ballot = " + ballot + " received heartbeat from " + sender + " with ballot " + m.ballot());
-        stopP1ATimer = true;
         if (leader) {
             if (m.ballot().compareTo(ballot) > 0) {
                 leader = false;
@@ -345,8 +343,7 @@ public class PaxosServer extends Node {
     // Your code here...
     private void onP2ATimer(P2ATimer t) {
         if (leader && t.ballot().compareTo(ballot) == 0) {
-            if (!receivedP2BFrom.containsKey(t.slotNum()) || !(receivedP2BFrom.get(t.slotNum()).size() >=
-                    servers.length / 2)) {
+            if (!receivedP2BFrom.containsKey(t.slotNum()) || !(chosen(log, t.slotNum()))) {
                 sendMsgExceptSelf(new P2A(t.ballot(), t.command(), t.slotNum()));
                 set(t, P2A_RETRY_TIMER);
             }
@@ -358,7 +355,7 @@ public class PaxosServer extends Node {
         if (!(/*receivedPositiveP1BFrom.contains(t.acceptor()) ||*/ // A. I received your response
             leader || // B. I am the leader
             stopP1ATimer ||
-            roleSettled)) { // C. I get a message with higher ballot
+            roleSettled) && ballot.compareTo(t.ballot()) == 0) { // C. I get a message with higher ballot
             //send(new P1A(t.ballot()), t.acceptor());
             sendMsgExceptSelf(new P1A(t.ballot()));
             set(t, P1A_RETRY_TIMER);

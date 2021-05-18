@@ -25,14 +25,14 @@ final class P2ATimer implements Timer {
 
 @Data
 final class P1ATimer implements Timer {
-    static final int P1A_RETRY_TIMER = 25;
+    static final int P1A_RETRY_TIMER = 50;
     //private final Address acceptor;
     private final Ballot ballot;
 }
 
 @Data
 final class HeartbeatCheckTimer implements Timer {
-    static final int HEARTBEAT_CHECK_MILLIS = 200;
+    static final int HEARTBEAT_CHECK_MILLIS = 300;
 }
 
 @Data

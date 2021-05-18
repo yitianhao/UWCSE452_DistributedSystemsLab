@@ -37,7 +37,7 @@ final class HeartbeatCheckTimer implements Timer {
 
 @Data
 final class HeartbeatReplyCheckTimer implements Timer {
-    static final int HEARTBEAT_REPLY_CHECK_MILLIS = 200;
+    static final int HEARTBEAT_REPLY_CHECK_MILLIS = 400;
 }
 
 @Data

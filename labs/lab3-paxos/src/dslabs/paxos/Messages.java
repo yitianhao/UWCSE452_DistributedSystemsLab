@@ -1,6 +1,7 @@
 package dslabs.paxos;
 
 import dslabs.atmostonce.AMOCommand;
+import dslabs.framework.Address;
 import dslabs.framework.Message;
 import dslabs.paxos.PaxosServer.Ballot;
 import dslabs.paxos.PaxosServer.LogEntry;
@@ -26,11 +27,12 @@ class P2B implements Message {
 class Heartbeat implements Message {
     private final HashMap<Integer, LogEntry> log;
     private final Ballot ballot;
+    private final HashMap<Address, Integer> garbageCollection;
 }
 
 @Data
 class HeartbeatReply implements Message {
-
+    private final int slotOut;
 }
 
 @Data

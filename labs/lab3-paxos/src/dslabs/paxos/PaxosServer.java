@@ -72,31 +72,6 @@ public class PaxosServer extends Node {
     @Override
     public void init() {
         // Your code here...
-//        Address max = servers[0];
-//        //System.out.println("max is "+max);
-//        for (Address a: servers) {
-//            if (a.compareTo(max) > 0) {
-//                max = a;
-//            }
-//        }
-//        //System.out.println("max is "+max);
-//        if (Objects.equals(address(), max)) {
-//            //System.out.println("leader = " + address());
-//            leader = true;
-//            ballot = new Ballot(seqNum, max);
-//            //System.out.println("max is "+max);
-//        } else {
-//            leader = false;
-//            ballot = new Ballot(seqNum, max);
-//        }
-//
-//
-//        for (Address otherServer : servers) {
-//            if (!Objects.equals(address(), otherServer)) {
-//                this.send(new Heartbeat(log), otherServer);
-//                this.set(new HeartbeatTimer(otherServer), HEARTBEAT_MILLIS);
-//            }
-//        }
         if (servers.length == 1) {
             leader = true;
         } else {
@@ -204,8 +179,9 @@ public class PaxosServer extends Node {
     private void handlePaxosRequest(PaxosRequest m, Address sender) {
         // Your code here...
         // As a non-leader, need to drop client request
-        ClientReqEntry entry = getSeqNumByClient(m.amoCommand().clientID());
-        if (leader && entry.seqNum < m.amoCommand().sequenceNum()) {
+        // ClientReqEntry entry = getSeqNumByClient(m.amoCommand().clientID());
+        int lastSeqNum = application.bookkeeping.keySet().contains(sender) ? application.bookkeeping.get(sender).seqNum : -1;
+        if (leader && lastSeqNum < m.amoCommand().sequenceNum()) {
             //System.out.println("leader = " + address());
             //System.out.println(sender + " | " + m.amoCommand().sequenceNum());
             if (servers.length == 1) {
@@ -218,18 +194,9 @@ public class PaxosServer extends Node {
                 set(new P2ATimer(slot_in, m.amoCommand(), ballot), P2A_RETRY_TIMER);
             }
             updateSlotIn();
-        } else if (leader && entry.seqNum == m.amoCommand().sequenceNum()) {
-            int slotNum = entry.slotNum;
-            if (log.containsKey(slotNum) && slotNum < slot_out) {
-                if (log.get(slotNum).result == null) {
-                    AMOResult result = application.execute(m.amoCommand());
-                    send(new PaxosReply(result), m.amoCommand().clientID());
-                    // update result
-                    log.put(slotNum, new LogEntry(log.get(slotNum).ballot, PaxosLogSlotStatus.CHOSEN, log.get(slotNum).command, result));
-                }
-                //System.out.println(sender + " not heard back from " + slotNum + "| now sending back result = " + log.get(slotNum).result);
-                send(new PaxosReply(log.get(slotNum).result), sender);
-            }
+        }  else if (lastSeqNum >= m.amoCommand().sequenceNum()) {
+            AMOResult result = application.execute(m.amoCommand());
+            send(new PaxosReply(result), sender);
         }
     }
 
@@ -239,12 +206,21 @@ public class PaxosServer extends Node {
         // only accept it if the ballot in the message matches the acceptor’s ballot,
         // which means the acceptor considers the sender to be the current leader
         if (!leader) {
-            if (m.ballot().compareTo(ballot) >= 0) {
+            if (m.ballot().compareTo(ballot) >= 0 && m.slotNum() >= this.slot_out) {
                 heardFromLeader(m.ballot(), sender);
                 ballot = m.ballot();
                 log.put(m.slotNum(), new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, m.command(), null));
                 send(new P2B(ballot, m.slotNum()), sender);
             }
+
+//            if (m.ballot().compareTo(ballot) < 0 || m.slotNum() < this.slot_out) return;
+//            heardFromLeader(m.ballot(), sender);
+//
+//            if (!chosen(log, m.slotNum())) {
+//                log.put(m.slotNum(), new LogEntry(ballot, PaxosLogSlotStatus.ACCEPTED, m.command(), null));
+//                slot_in = Math.max(slot_in, m.slotNum());
+//            }
+//            send(new P2B(ballot, m.slotNum()), sender);
         } else {
             checkLeaderValidity(m.ballot());
         }

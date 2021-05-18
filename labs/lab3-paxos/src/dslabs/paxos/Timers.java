@@ -17,7 +17,7 @@ final class ClientTimer implements Timer {
 // Your code here...
 @Data
 final class P2ATimer implements Timer {
-    static final int P2A_RETRY_TIMER = 50;
+    static final int P2A_RETRY_TIMER = 25;
     private final Integer slotNum;
     private final AMOCommand command;
     private final Ballot ballot;
@@ -25,7 +25,7 @@ final class P2ATimer implements Timer {
 
 @Data
 final class P1ATimer implements Timer {
-    static final int P1A_RETRY_TIMER = 50;
+    static final int P1A_RETRY_TIMER = 25;
     //private final Address acceptor;
     private final Ballot ballot;
 }

@@ -21,9 +21,9 @@ public final class AMOApplication<T extends Application>
     @Getter @NonNull private final T application;
 
     // Your code here...
-    private static class Tuple implements Serializable {
-        private Integer seqNum;
-        private Result result;
+    public static class Tuple implements Serializable {
+        public Integer seqNum;
+        public Result result;
 
         public Tuple(Integer seqNum, Result result) {
             this.result = result;
@@ -47,7 +47,7 @@ public final class AMOApplication<T extends Application>
             return Objects.hash(seqNum, result);
         }
     }
-    private HashMap<Address, Tuple> bookkeeping = new HashMap<>();
+    public HashMap<Address, Tuple> bookkeeping = new HashMap<>();
     private Address serverAddress;
     public AMOApplication(T app, Address address) {
         application = app;

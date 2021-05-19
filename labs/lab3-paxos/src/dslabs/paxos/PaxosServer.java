@@ -218,6 +218,7 @@ public class PaxosServer extends Node {
     private void handleP2A(P2A m, Address sender) {
         // only accept it if the ballot in the message matches the acceptor’s ballot,
         // which means the acceptor considers the sender to be the current leader
+        if (chosen(log, m.slotNum())) return;
         if (!leader) {
             if (m.ballot().compareTo(ballot) >= 0) {
                 heardFromLeader(m.ballot(), sender);
@@ -311,7 +312,7 @@ public class PaxosServer extends Node {
         receivedLogs.add(m.log());
 
         if (receivedPositiveP1BFrom.size() >= servers.length / 2) {
-            //System.out.println("--------- " + address() + " = leader ------------- ballot" + ballot.toString());
+            System.out.println("--------- " + address() + " = leader ------------- ballot" + ballot.toString());
             leader = true;
             //roleSettled = true;
             mergeLog();
@@ -402,7 +403,7 @@ public class PaxosServer extends Node {
             AMOCommand command = log.get(i).command;
             if (command != null) {  // in the case of no-op
                 AMOResult result = application.execute(command);
-                //System.out.println(i + " , result = " + result + ", client = " + command.clientID());
+                System.out.println(address().toString() + " is exe" + i + " , result = " + result + ", client = " + command.clientID());
                 send(new PaxosReply(result), command.clientID());
                 // update result
                 log.put(i, new LogEntry(log.get(i).ballot, PaxosLogSlotStatus.CHOSEN, log.get(i).command, result));

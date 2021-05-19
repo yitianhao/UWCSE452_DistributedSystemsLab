@@ -38,6 +38,7 @@ final class HeartbeatCheckTimer implements Timer {
 @Data
 final class HeartbeatReplyCheckTimer implements Timer {
     static final int HEARTBEAT_REPLY_CHECK_MILLIS = 400;
+    //private final Ballot ballot;
 }
 
 @Data

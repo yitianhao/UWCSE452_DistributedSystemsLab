@@ -32,6 +32,9 @@ Previous updates:
         only when "roleSettled", can increase ballot
         P1A will use seqNum + address constructed ballot; rather than this.ballot(because this can be updated to higher ballot of another server during P1A)
 12. [test18 log] Partitioned-out leader should know it is not leader any more if it didn't hear back HeartbeatReply for a long time.
+13. Probably we don't need roleSettled variable?
+14. [test23 viz] handleP2B should not accept message with old ballot (i.e., < current ballot)
+15. [test11 https://edstem.org/us/courses/4921/discussion/429309] clear receivedLogs once merge is done
 
 Timers:
 P2ATimer: 1 timer ~ (n - 1) P2A send to other acceptors
@@ -40,7 +43,7 @@ HeartbeatTimer: 1 timer ~ (n - 1) Heartbeat send to other acceptors
 HeartbeatCheckTimer: set in init, renew timer when a new leader is chosen
 HeartbeatReplyCheckTimer: remind the leader that nobody get your heartbeat in a time interval, probably you are partitioned out??
 
-May. 18 current difficulty:
-1. test18, 23 not pass, probably this?? https://edstem.org/us/courses/4921/discussion/446463
-2. ballot number not understood https://edstem.org/us/courses/4921/discussion/416741
+reminds problems:
+1. see printing to debug
+2. HeartbeatCheckTimer
 

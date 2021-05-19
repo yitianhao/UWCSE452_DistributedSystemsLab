@@ -233,7 +233,7 @@ public class PaxosServer extends Node {
 
     // ---------------leader--------------
     private void handleP2B(P2B m, Address sender) {
-        if (leader && !chosen(log, m.slotNum())) {
+        if (leader && !chosen(log, m.slotNum()) && m.ballot().compareTo(ballot) >= 0) {
             checkLeaderValidity(m.ballot());
             HashSet<Address> addresses = receivedP2BFrom.getOrDefault(m.slotNum(), new HashSet<>());
             addresses.add(sender);
@@ -319,6 +319,7 @@ public class PaxosServer extends Node {
             executeChosen();
             garbageCollection.put(address(), slot_out);
             receivedP2BFrom = new HashMap<>();
+            receivedLogs = new HashSet<>();
             sendAcceptedP2A();
             beginHeartbeat();
             this.set(new HeartbeatReplyCheckTimer(), HEARTBEAT_REPLY_CHECK_MILLIS);
@@ -419,7 +420,6 @@ public class PaxosServer extends Node {
         ballot = new Ballot(seqNum, address());
         stopP1ATimer = false;
         receivedPositiveP1BFrom = new HashSet<>();
-        receivedLogs = new HashSet<>();
         sendMsgExceptSelf(new P1A(ballot));
         set(new P1ATimer(ballot), P1A_RETRY_TIMER);
         //roleSettled = false;
@@ -526,6 +526,7 @@ public class PaxosServer extends Node {
             this.ballot = ballot;
         }
         heartbeatReceivedThisInterval = true;
+        //onHeartbeatCheckTimer(timer);
         if (!Objects.equals(lastLeader, sender)) {
             //roleSettled = true;
             //System.out.println(address() + " found: change leader from " + lastLeader.toString() + " to " + sender.toString());

@@ -7,8 +7,8 @@ Brief description of design:
 
 
 
-Union of hours spent on the lab: Yitian (38 hrs) + Zheng (29 hrs)
-Total time spent on the lab: 67 hrs
+Union of hours spent on the lab: Yitian (38 hrs) + Zheng (31 hrs)
+Total time spent on the lab: 69 hrs
 
 Development timeline:
 1. write inner/helper classes for Ballots and Log(s)

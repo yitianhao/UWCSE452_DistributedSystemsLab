@@ -1,13 +1,14 @@
 Lab 3 Writeup
 
-Partner 1 Name, NetID: 
-Partner 2 Name, NetID: 
+Partner 1 Name, NetID: Yitian Hao, yh255
+Partner 2 Name, NetID: Zheng Wang, zwang217
 
 Brief description of design:
 
 
-Union of hours spent on the lab:
-Total time spent on the lab:
+
+Union of hours spent on the lab: Yitian (38 hrs) + Zheng (29 hrs)
+Total time spent on the lab: 67 hrs
 
 Development timeline:
 1. write inner/helper classes for Ballots and Log(s)
@@ -35,15 +36,11 @@ Previous updates:
 13. Probably we don't need roleSettled variable?
 14. [test23 viz] handleP2B should not accept message with old ballot (i.e., < current ballot)
 15. [test11 https://edstem.org/us/courses/4921/discussion/429309] clear receivedLogs once merge is done
+16. [test 18 all pass] Removed HeartbeatCheckReplyTimer since TA said so.
+    handleP1A includes the case that the incoming leader's ballot is the same as the follower's. (This could happen if P1B gets dropped and leader resends P1A)
 
 Timers:
 P2ATimer: 1 timer ~ (n - 1) P2A send to other acceptors
 P1ATimer: 1 timer ~ 1 P1A
 HeartbeatTimer: 1 timer ~ (n - 1) Heartbeat send to other acceptors
 HeartbeatCheckTimer: set in init, renew timer when a new leader is chosen
-HeartbeatReplyCheckTimer: remind the leader that nobody get your heartbeat in a time interval, probably you are partitioned out??
-
-reminds problems:
-1. see printing to debug
-2. HeartbeatCheckTimer
-

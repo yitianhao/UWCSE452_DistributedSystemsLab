@@ -35,11 +35,11 @@ final class HeartbeatCheckTimer implements Timer {
     static final int HEARTBEAT_CHECK_MILLIS = 300;
 }
 
-@Data
-final class HeartbeatReplyCheckTimer implements Timer {
-    static final int HEARTBEAT_REPLY_CHECK_MILLIS = 400;
-    //private final Ballot ballot;
-}
+//@Data
+//final class HeartbeatReplyCheckTimer implements Timer {
+//    static final int HEARTBEAT_REPLY_CHECK_MILLIS = 400;
+//    //private final Ballot ballot;
+//}
 
 @Data
 final class HeartbeatTimer implements Timer {

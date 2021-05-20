@@ -5,6 +5,42 @@ Partner 2 Name, NetID: Zheng Wang, zwang217
 
 Brief description of design:
 
+Paxos Client:
+Basically the same as the client class of lab1 and lab2
+
+Paxos Server:
+Based on the slides, a server should send P1A/P2A to all servers including itself. Our design is a little
+different from that which is a server doesn't actually send or reply anything to itself, we assume it will always
+agree with itself and include it when counting majority.
+
+Phase2:
+When the leader receives a request from a client, it updates its log to include a ACCEPTED command since itself will
+always vote yes and send P2A to all other servers. When other servers receive a P2A and they are not leader, it will
+give a positive vote (P2B) if the incoming ballot is greater or the same. They also update their logs to include a
+ACCEPTED command. If some of them also think they are the leader, they will check leader validity.
+
+The leader will keep sending P2A to all other servers until it receives majority, then it will update log so that
+the command is chosen for some slot, it will execute that command and send reply to the client.
+
+Phase1:
+At first, all servers send P1A to all other servers. Or a server will send P1A to other servers when it think the leader
+is dead. If the incoming ballot in P1A is higher or the same, a server will update its own ballot and give a positive
+vote (P1B). A potential leader will become leader if it receives majority vote. It will also merge logs from other
+severs and begin heartbeat.
+
+Heartbeat:
+The leader keeps sending heartbeat to other servers so that other servers know it's still alive and won't elect.
+The heartbeat includes the leader's log for other severs to merge. This is the way we keep everything consistent.
+
+Other severs have a heartbeat check timer. If during the interval, there is no heartbeat or P2A coming, then this server
+thinks the leader is dead and start elect.
+
+Other servers also send a HeartbeatReply when receiving heartbeat to tell the leader its current slot_out because its
+log has been changed after merging the log from leader. And the leader needs to know other servers' slot_out to do
+garbage collection correctly.
+
+
+
 
 
 Union of hours spent on the lab: Yitian (38 hrs) + Zheng (31 hrs)

@@ -1,13 +1,50 @@
 Lab 3 Writeup
 
-Partner 1 Name, NetID: 
-Partner 2 Name, NetID: 
+Partner 1 Name, NetID: Yitian Hao, yh255
+Partner 2 Name, NetID: Zheng Wang, zwang217
 
 Brief description of design:
 
+Paxos Client:
+Basically the same as the client class of lab1 and lab2
 
-Union of hours spent on the lab:
-Total time spent on the lab:
+Paxos Server:
+Based on the slides, a server should send P1A/P2A to all servers including itself. Our design is a little
+different from that which is a server doesn't actually send or reply anything to itself, we assume it will always
+agree with itself and include it when counting majority.
+
+Phase2:
+When the leader receives a request from a client, it updates its log to include a ACCEPTED command since itself will
+always vote yes and send P2A to all other servers. When other servers receive a P2A and they are not leader, it will
+give a positive vote (P2B) if the incoming ballot is greater or the same. They also update their logs to include a
+ACCEPTED command. If some of them also think they are the leader, they will check leader validity.
+
+The leader will keep sending P2A to all other servers until it receives majority, then it will update log so that
+the command is chosen for some slot, it will execute that command and send reply to the client.
+
+Phase1:
+At first, all servers send P1A to all other servers. Or a server will send P1A to other servers when it think the leader
+is dead. If the incoming ballot in P1A is higher or the same, a server will update its own ballot and give a positive
+vote (P1B). A potential leader will become leader if it receives majority vote. It will also merge logs from other
+severs and begin heartbeat.
+
+Heartbeat:
+The leader keeps sending heartbeat to other servers so that other servers know it's still alive and won't elect.
+The heartbeat includes the leader's log for other severs to merge. This is the way we keep everything consistent.
+
+Other severs have a heartbeat check timer. If during the interval, there is no heartbeat or P2A coming, then this server
+thinks the leader is dead and start elect.
+
+Other servers also send a HeartbeatReply when receiving heartbeat to tell the leader its current slot_out because its
+log has been changed after merging the log from leader. And the leader needs to know other servers' slot_out to do
+garbage collection correctly.
+
+
+
+
+
+Union of hours spent on the lab: Yitian (38 hrs) + Zheng (31 hrs)
+Total time spent on the lab: 69 hrs
 
 Development timeline:
 1. write inner/helper classes for Ballots and Log(s)
@@ -15,14 +52,31 @@ Development timeline:
   You can start by hard-coding one of the servers as the leader
   Make sure executions are happening in order (starting from slot_out and don’t skip slots) and progress can be made for clients
 
+Previous updates:
+1. [Andrew's OH] Set one timer for a message send (even though send this message to multiple servers)
+2. [test14 log] handle the case that PaxosReply send failed
+3. on timer resent should use previous ballot (i.e., the ballot recorded in the message), not current ballot
+4. [ED https://edstem.org/us/courses/4921/discussion/437649] HeartbeatCheckTimer should be set at init for every server, reset when appropriate
+5. [OH] If I think I am the leader and I found the incoming message contains a higher ballot, I am not leader anymore
+6. [running --checks] Inner classes need @equals and @hashcode and optionally @toString (for debugging)
+7. [test14 log] Only leader has the right to reset P2ATimer
+8. [test14 log] when leader is settled, re-propose the accepted slots with own ballot
+9. [test24 viz] Two types of mergeLog
+       (P1B merge won’t decide no-op; leader merge ref. https://edstem.org/us/courses/4921/discussion/410869
+10. [test24 viz] Decide when the leader is elected:
+        add lastLeader (now leader is elected, followers should reset checker timer)
+11. [test24 viz] Followers shouldn’t try to start leader election too early
+        only when "roleSettled", can increase ballot
+        P1A will use seqNum + address constructed ballot; rather than this.ballot(because this can be updated to higher ballot of another server during P1A)
+12. [test18 log] Partitioned-out leader should know it is not leader any more if it didn't hear back HeartbeatReply for a long time.
+13. Probably we don't need roleSettled variable?
+14. [test23 viz] handleP2B should not accept message with old ballot (i.e., < current ballot)
+15. [test11 https://edstem.org/us/courses/4921/discussion/429309] clear receivedLogs once merge is done
+16. [test 18 all pass] Removed HeartbeatCheckReplyTimer since TA said so.
+    handleP1A includes the case that the incoming leader's ballot is the same as the follower's. (This could happen if P1B gets dropped and leader resends P1A)
 
-Leader election/Prepares messages/timers (P1As, P1Bs)
-Start leader election at the very start
-Check if leader is alive
-Heartbeats
-Catch-up mechanism
-Garbage collectio
-
-only update slot_in when the the server becomes a leader
-
-We recommend that candidates just keep retrying with the same ballot number until they succeed or become a follower.
+Timers:
+P2ATimer: 1 timer ~ (n - 1) P2A send to other acceptors
+P1ATimer: 1 timer ~ 1 P1A
+HeartbeatTimer: 1 timer ~ (n - 1) Heartbeat send to other acceptors
+HeartbeatCheckTimer: set in init, renew timer when a new leader is chosen

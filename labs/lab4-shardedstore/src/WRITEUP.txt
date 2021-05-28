@@ -1,7 +1,7 @@
 Lab 4 Writeup
 
-Partner 1 Name, NetID: 
-Partner 2 Name, NetID: 
+Partner 1 Name, NetID: Yitian Hao, yh255
+Partner 2 Name, NetID: Zheng Wang, zw217
 
 Brief description of design:
 
@@ -9,3 +9,8 @@ Brief description of design:
 Union of hours spent on the lab:
 Total time spent on the lab:
 
+Terminology:
+- multiple replica groups (each consists of a set of Paxos servers)
+- one shard master (consists of a set of Paxos servers)
+
+Part1: ShardMaster

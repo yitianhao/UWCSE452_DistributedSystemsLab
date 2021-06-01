@@ -14,3 +14,8 @@ Terminology:
 - one shard master (consists of a set of Paxos servers)
 
 Part1: ShardMaster
+
+Part2:
+2.1 ShardStoreClient:
+- get current ShardConfig to see which ReplicaGroup to send request
+- send ShardStoreRequest and handle ShardStoreResponse

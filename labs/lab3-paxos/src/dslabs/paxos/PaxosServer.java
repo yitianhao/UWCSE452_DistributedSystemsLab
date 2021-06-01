@@ -8,6 +8,7 @@ import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Message;
 import dslabs.framework.Node;
+import dslabs.shardkv.PaxosDecision;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
@@ -25,6 +26,7 @@ import static dslabs.paxos.P2ATimer.P2A_RETRY_TIMER;
 @EqualsAndHashCode(callSuper = true)
 public class PaxosServer extends Node {
     private final Address[] servers;
+    private final Address shardStoreServer;
 
     // Your code here...
     private final AMOApplication<Application> application;
@@ -51,6 +53,7 @@ public class PaxosServer extends Node {
     public PaxosServer(Address address, Address[] servers, Application app) {
         super(address);
         this.servers = servers;
+        shardStoreServer = null;
 
         // Your code here...
         this.application = new AMOApplication<>(app);
@@ -67,6 +70,26 @@ public class PaxosServer extends Node {
         firstNonCleared = 1;
     }
 
+    // For lab4-2
+    public PaxosServer(Address address, Address[] servers, Address shardStoreServer) {
+        super(address);
+        this.servers = servers;
+        this.shardStoreServer = shardStoreServer;
+        this.application = null;
+
+        // Your code here...
+        this.log = new HashMap<>();
+        slot_in = 1;
+        slot_out = 1;
+        seqNum = -1;
+        ballot = new Ballot(seqNum, address);
+        receivedP2BFrom = new HashMap<>();
+        stopP1ATimer = false;
+        timer = new HeartbeatCheckTimer();
+        receivedLogs = new HashSet<>();
+        garbageCollection = new HashMap<>();
+        firstNonCleared = 1;
+    }
 
     @Override
     public void init() {
@@ -191,10 +214,11 @@ public class PaxosServer extends Node {
         // Your code here...
         // As a non-leader, need to drop client request
         if (application.alreadyExecuted(m.amoCommand())) {
-            AMOResult result = application.execute(m.amoCommand());
-            if (result.sequenceNum() == m.amoCommand().sequenceNum()) {
-                send(new PaxosReply(result), sender);
-            }
+//            AMOResult result = application.execute(m.amoCommand());
+//            if (result.sequenceNum() == m.amoCommand().sequenceNum()) {
+//                send(new PaxosReply(result), sender);
+//            }
+            handleMessage(new PaxosDecision(m.amoCommand()), shardStoreServer);
         } else if (leader && !oldRequest(sender, m.amoCommand().sequenceNum())) {
             if (servers.length == 1) {
                 log.put(slot_in, new LogEntry(ballot, PaxosLogSlotStatus.CHOSEN, m.amoCommand(), null));
@@ -376,10 +400,11 @@ public class PaxosServer extends Node {
         while (log.containsKey(i) && chosen(log, i)) {
             AMOCommand command = log.get(i).command;
             if (command != null) {  // in the case of no-op
-                AMOResult result = application.execute(command);
-                send(new PaxosReply(result), command.clientID());
+//                AMOResult result = application.execute(command);
+//                send(new PaxosReply(result), command.clientID());
+                handleMessage(new PaxosDecision(command), shardStoreServer);
                 // update result
-                log.put(i, new LogEntry(log.get(i).ballot, PaxosLogSlotStatus.CHOSEN, log.get(i).command, result));
+                log.put(i, new LogEntry(log.get(i).ballot, PaxosLogSlotStatus.CHOSEN, log.get(i).command, null));
             }
             i++;
         }

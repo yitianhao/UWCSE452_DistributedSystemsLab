@@ -10,6 +10,7 @@ final class ClientTimer implements Timer {
 
     // Your code here...
     private final AMOCommand command;
+    private final int groupID;
 }
 
 // Your code here...

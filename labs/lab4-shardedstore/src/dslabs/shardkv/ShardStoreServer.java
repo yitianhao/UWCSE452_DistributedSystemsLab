@@ -1,5 +1,6 @@
 package dslabs.shardkv;
 
+import dslabs.atmostonce.AMOApplication;
 import dslabs.atmostonce.AMOCommand;
 import dslabs.framework.Address;
 import dslabs.framework.Command;
@@ -11,6 +12,7 @@ import dslabs.paxos.PaxosServer;
 import dslabs.shardmaster.ShardMaster.Query;
 import dslabs.shardmaster.ShardMaster.ShardConfig;
 import dslabs.shardmaster.ShardMaster.ShardMasterResult;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import lombok.Data;
@@ -30,6 +32,7 @@ public class ShardStoreServer extends ShardStoreNode {
     // Your code here...
     private static final String PAXOS_ADDRESS_ID = "paxos";
     private Address paxosAddress;
+    Map<Integer, AMOApplication> shardToApplication = new HashMap<>();
 
     /* -------------------------------------------------------------------------
         Construction and initialization
@@ -57,9 +60,7 @@ public class ShardStoreServer extends ShardStoreNode {
         addSubNode(paxosServer);
         paxosServer.init();
 
-        for (Address shardMaster : shardMasters()) {
-            this.send(new PaxosRequest(new AMOCommand(new Query(-1), address(), -1)), shardMaster);
-        }
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), -1)));
         this.set(new QueryTimer(), QUERY_RETRY_MILLIS);
     }
 
@@ -81,7 +82,7 @@ public class ShardStoreServer extends ShardStoreNode {
     // TODO
     // Receive PaxosReply from the ShardMaster, informing about the new configs
     private void handlePaxosReply(PaxosReply m, Address sender) {
-        process(new NewConfig((ShardConfig)(Result) m.result()), false);
+        process(new NewConfig((ShardConfig) m.result().result()), false);
     }
 
     // TODO
@@ -143,7 +144,14 @@ public class ShardStoreServer extends ShardStoreNode {
     }
 
     private void processNewConfig(NewConfig nc, boolean replicated) {
+        if (!replicated) {
+            paxosPropose(nc);
+        }
+    }
 
+    private void paxosPropose(Command command) {
+        // TODO: ASK TA
+        handleMessage(new PaxosRequest(new AMOCommand(command, address(), -1)), paxosAddress);
     }
 
     private void processAMOCommand(AMOCommand amoCommand, boolean replicated) {

@@ -4,6 +4,8 @@ import dslabs.framework.Address;
 import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Result;
+import dslabs.paxos.PaxosReply;
+import dslabs.paxos.PaxosRequest;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;

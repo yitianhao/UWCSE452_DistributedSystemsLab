@@ -214,11 +214,14 @@ public class PaxosServer extends Node {
         // Your code here...
         // As a non-leader, need to drop client request
         if (application.alreadyExecuted(m.amoCommand())) {
-//            AMOResult result = application.execute(m.amoCommand());
-//            if (result.sequenceNum() == m.amoCommand().sequenceNum()) {
-//                send(new PaxosReply(result), sender);
-//            }
-            handleMessage(new PaxosDecision(m.amoCommand()), shardStoreServer);
+            if (this.application != null) {
+                AMOResult result = application.execute(m.amoCommand());
+                if (result.sequenceNum() == m.amoCommand().sequenceNum()) {
+                    send(new PaxosReply(result), sender);
+                }
+            } else {
+                handleMessage(new PaxosDecision(m.amoCommand()), shardStoreServer);
+            }
         } else if (leader && !oldRequest(sender, m.amoCommand().sequenceNum())) {
             if (servers.length == 1) {
                 log.put(slot_in, new LogEntry(ballot, PaxosLogSlotStatus.CHOSEN, m.amoCommand(), null));
@@ -400,9 +403,12 @@ public class PaxosServer extends Node {
         while (log.containsKey(i) && chosen(log, i)) {
             AMOCommand command = log.get(i).command;
             if (command != null) {  // in the case of no-op
-//                AMOResult result = application.execute(command);
-//                send(new PaxosReply(result), command.clientID());
-                handleMessage(new PaxosDecision(command), shardStoreServer);
+                if (this.application != null) {
+                    AMOResult result = application.execute(command);
+                    send(new PaxosReply(result), command.clientID());
+                } else {
+                    handleMessage(new PaxosDecision(command), shardStoreServer);
+                }
                 // update result
                 log.put(i, new LogEntry(log.get(i).ballot, PaxosLogSlotStatus.CHOSEN, log.get(i).command, null));
             }

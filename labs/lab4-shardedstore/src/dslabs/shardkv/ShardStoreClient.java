@@ -16,6 +16,7 @@ import lombok.ToString;
 
 import static dslabs.shardkv.ClientTimer.CLIENT_RETRY_MILLIS;
 import static dslabs.shardkv.QueryTimer.QUERY_RETRY_MILLIS;
+import static dslabs.shardmaster.ShardMaster.INITIAL_CONFIG_NUM;
 
 
 @ToString(callSuper = true)
@@ -38,14 +39,10 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     @Override
     public synchronized void init() {
         // Your code here...
-        // TODO: ping ShardMaster often for new ShardConfig
-        broadcastToShardMasters(new PaxosRequest((AMOCommand)(Command) new Query(-1)));
-        currShardConfig = new ShardConfig(-1, new HashMap<>());
-
-        for (Address shardMaster : shardMasters()) {
-            this.send(new PaxosRequest(new AMOCommand(new Query(-1), address(), -1)), shardMaster);
-        }
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), -1)));
         this.set(new QueryTimer(), QUERY_RETRY_MILLIS);
+
+        currShardConfig = new ShardConfig(-1, new HashMap<>());
     }
 
     /* -------------------------------------------------------------------------
@@ -61,10 +58,12 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
         shardStoreRequest = new ShardStoreRequest(amoCommand);
         shardStoreReply = null;
 
-        for (Address server : currShardConfig.groupInfo().get(groupID).getLeft()) {
-            this.send(new ShardStoreRequest(amoCommand), server);
+        if (currShardConfig.configNum() >= INITIAL_CONFIG_NUM) {
+            for (Address server : currShardConfig.groupInfo().get(groupID).getLeft()) {
+                this.send(new ShardStoreRequest(amoCommand), server);
+            }
+            this.set(new ClientTimer(amoCommand, groupID), CLIENT_RETRY_MILLIS);
         }
-        this.set(new ClientTimer(amoCommand), CLIENT_RETRY_MILLIS);
     }
 
     @Override
@@ -98,7 +97,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
 
     // Your code here...
     private synchronized void handlePaxosReply(PaxosReply m, Address sender) {
-        ShardConfig sc = (ShardConfig) (Result) m.result();
+        ShardConfig sc = (ShardConfig) m.result().result();
         if (m != null && m.result() != null && currShardConfig.configNum() < sc.configNum()) {
             currShardConfig = sc;
         }
@@ -109,6 +108,12 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void onClientTimer(ClientTimer t) {
         // Your code here...
+        if (seqNum == t.command().sequenceNum() && shardStoreReply == null) {
+            for (Address server : currShardConfig.groupInfo().get(t.groupID()).getLeft()) {
+                this.send(new ShardStoreRequest(t.command()), server);
+            }
+            this.set(t, CLIENT_RETRY_MILLIS);
+        }
     }
 
     private void onQueryTimer(QueryTimer t) {

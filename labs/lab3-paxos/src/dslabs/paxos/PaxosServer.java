@@ -214,16 +214,10 @@ public class PaxosServer extends Node {
     private void handlePaxosRequest(PaxosRequest m, Address sender) {
         // Your code here...
         // As a non-leader, need to drop client request
-        // System.out.println(m.toString());
-        // if (notHeardPrevReq(m.amoCommand().clientID(), m.amoCommand().sequenceNum())) return;
-        if (m.amoCommand().sequenceNum() != DUMMY_SEQ_NUM && application != null && application.alreadyExecuted(m.amoCommand())) {
-            if (application != null) {
-                AMOResult result = application.execute(m.amoCommand());
-                if (result.sequenceNum() == m.amoCommand().sequenceNum()) {
-                    send(new PaxosReply(result), sender);
-                }
-            } else {
-                handleMessage(new PaxosDecision(m.amoCommand()), shardStoreServer);
+        if (application != null && application.alreadyExecuted(m.amoCommand())) {
+            AMOResult result = application.execute(m.amoCommand());
+            if (result.sequenceNum() == m.amoCommand().sequenceNum()) {
+                send(new PaxosReply(result), sender);
             }
         } else if (leader && (m.amoCommand().sequenceNum() == DUMMY_SEQ_NUM || !oldRequest(sender, m.amoCommand().sequenceNum()))) {
             if (servers.length == 1) {
@@ -305,6 +299,13 @@ public class PaxosServer extends Node {
     private void clearGarbage(int minSlotOut) {
         int minSlotNotCleared = log.keySet().size() > 0 ? Collections.min(log.keySet()) : 1;
         for (; minSlotNotCleared < minSlotOut; minSlotNotCleared++) {
+            // send back to ShardStoreServer
+//            if (log.get(minSlotNotCleared) != null) {
+//                handleMessage(new PaxosDecision(log.get(minSlotNotCleared).command), shardStoreServer);
+//            } else {
+//                System.out.println("NULL!!!!");
+//            }
+//            System.out.println(log.get(minSlotNotCleared).toString());
             log.remove(minSlotNotCleared);
         }
         firstNonCleared = Math.max(firstNonCleared, minSlotOut);
@@ -404,13 +405,13 @@ public class PaxosServer extends Node {
     private void executeChosen() {
         int i = slot_out;
         while (log.containsKey(i) && chosen(log, i)) {
-            AMOCommand command = log.get(i).command;
-            if (command != null) {  // in the case of no-op
+            AMOCommand amoCommand = log.get(i).command;
+            if (amoCommand != null) {  // in the case of no-op
                 if (this.application != null) {
-                    AMOResult result = application.execute(command);
-                    send(new PaxosReply(result), command.clientID());
+                    AMOResult result = application.execute(amoCommand);
+                    send(new PaxosReply(result), amoCommand.clientID());
                 } else {
-                    handleMessage(new PaxosDecision(command), shardStoreServer);
+                    handleMessage(new PaxosDecision(amoCommand), shardStoreServer);
                 }
                 // update result
                 log.put(i, new LogEntry(log.get(i).ballot, PaxosLogSlotStatus.CHOSEN, log.get(i).command, null));

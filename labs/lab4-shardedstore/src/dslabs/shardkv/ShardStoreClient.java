@@ -60,8 +60,8 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
         shardStoreRequest = new ShardStoreRequest(amoCommand);
         shardStoreReply = null;
 
-        System.out.println(amoCommand.toString());
         if (currShardConfig.configNum() >= INITIAL_CONFIG_NUM) {
+            //System.out.println(amoCommand.toString());
             int groupID = getGroupIdForShard(command);
             broadcast(new ShardStoreRequest(amoCommand), currShardConfig.groupInfo().get(groupID).getLeft());
             this.set(new ClientTimer(amoCommand, groupID), CLIENT_RETRY_MILLIS);
@@ -95,8 +95,8 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
                                                     Address sender) {
         // Your code here...
         if (m != null && m.result() != null && seqNum == m.result().sequenceNum()) {
-            System.out.println("---" + m.result().toString());
-            System.out.println();
+//            System.out.println("---" + m.result().toString());
+//            System.out.println();
             shardStoreReply = m;
             notify();
         }
@@ -108,6 +108,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
                 ((ShardConfig) m.result().result()).configNum() >= currShardConfig.configNum()) {
             currShardConfig = (ShardConfig) m.result().result();
             if (currShardConfig.configNum() == INITIAL_CONFIG_NUM && firstCommandSkipped) {
+                //System.out.println(skippedCommand.toString());
                 int groupID = getGroupIdForShard(skippedCommand.command());
                 broadcast(new ShardStoreRequest(skippedCommand), currShardConfig.groupInfo().get(groupID).getLeft());
                 this.set(new ClientTimer(skippedCommand, groupID), CLIENT_RETRY_MILLIS);

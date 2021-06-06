@@ -86,7 +86,7 @@ public class ShardStoreServer extends ShardStoreNode {
     // TODO
     // Receive PaxosReply from the ShardMaster, informing about the new configs
     private void handlePaxosReply(PaxosReply m, Address sender) {
-        if (m.result().result() instanceof ShardConfig && (((ShardConfig) m.result().result()).configNum() >= currShardConfig.configNum())) {
+        if (m.result().result() instanceof ShardConfig && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())) {
             inReConfig = true;
             process(new NewConfig((ShardConfig) m.result().result()), false);
         }

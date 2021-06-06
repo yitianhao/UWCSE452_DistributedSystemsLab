@@ -8,5 +8,5 @@ import lombok.Data;
 // Your code here...
 @Data
 public final class PaxosDecision implements Message {
-    private final Command command;
+    private final AMOCommand amoCommand;
 }

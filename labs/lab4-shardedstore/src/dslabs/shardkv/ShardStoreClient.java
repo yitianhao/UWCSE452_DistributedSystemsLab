@@ -5,8 +5,10 @@ import dslabs.framework.Address;
 import dslabs.framework.Client;
 import dslabs.framework.Command;
 import dslabs.framework.Result;
+import dslabs.kvstore.KVStore.SingleKeyCommand;
 import dslabs.paxos.PaxosReply;
 import dslabs.paxos.PaxosRequest;
+import dslabs.shardmaster.ShardMaster.Error;
 import dslabs.shardmaster.ShardMaster.Query;
 import dslabs.shardmaster.ShardMaster.ShardConfig;
 import dslabs.shardmaster.ShardMaster.ShardMasterResult;
@@ -16,6 +18,7 @@ import lombok.ToString;
 
 import static dslabs.shardkv.ClientTimer.CLIENT_RETRY_MILLIS;
 import static dslabs.shardkv.QueryTimer.QUERY_RETRY_MILLIS;
+import static dslabs.shardkv.ShardStoreServer.DUMMY_SEQ_NUM;
 import static dslabs.shardmaster.ShardMaster.INITIAL_CONFIG_NUM;
 
 
@@ -27,6 +30,8 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     private ShardStoreRequest shardStoreRequest;
     private ShardStoreReply shardStoreReply;
     private int seqNum;
+    private AMOCommand skippedCommand;
+    private boolean firstCommandSkipped;
 
     /* -------------------------------------------------------------------------
         Construction and Initialization
@@ -39,7 +44,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     @Override
     public synchronized void init() {
         // Your code here...
-        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), -1)));
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), DUMMY_SEQ_NUM)));
         this.set(new QueryTimer(), QUERY_RETRY_MILLIS);
 
         currShardConfig = new ShardConfig(-1, new HashMap<>());
@@ -51,18 +56,18 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     @Override
     public synchronized void sendCommand(Command command) {
         // Your code here...
-        int shardNum = keyToShard(command.toString());
-        int groupID = getGroupIdForShard(shardNum);
-
         AMOCommand amoCommand = new AMOCommand(command, this.address(), seqNum);
         shardStoreRequest = new ShardStoreRequest(amoCommand);
         shardStoreReply = null;
 
+        System.out.println(amoCommand.toString());
         if (currShardConfig.configNum() >= INITIAL_CONFIG_NUM) {
-            for (Address server : currShardConfig.groupInfo().get(groupID).getLeft()) {
-                this.send(new ShardStoreRequest(amoCommand), server);
-            }
+            int groupID = getGroupIdForShard(command);
+            broadcast(new ShardStoreRequest(amoCommand), currShardConfig.groupInfo().get(groupID).getLeft());
             this.set(new ClientTimer(amoCommand, groupID), CLIENT_RETRY_MILLIS);
+        } else {
+            skippedCommand = amoCommand;
+            firstCommandSkipped = true;
         }
     }
 
@@ -90,6 +95,8 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
                                                     Address sender) {
         // Your code here...
         if (m != null && m.result() != null && seqNum == m.result().sequenceNum()) {
+            System.out.println("---" + m.result().toString());
+            System.out.println();
             shardStoreReply = m;
             notify();
         }
@@ -97,9 +104,15 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
 
     // Your code here...
     private synchronized void handlePaxosReply(PaxosReply m, Address sender) {
-        ShardConfig sc = (ShardConfig) m.result().result();
-        if (m != null && m.result() != null && currShardConfig.configNum() < sc.configNum()) {
-            currShardConfig = sc;
+        if (m != null && m.result() != null && m.result().result() instanceof ShardConfig &&
+                ((ShardConfig) m.result().result()).configNum() >= currShardConfig.configNum()) {
+            currShardConfig = (ShardConfig) m.result().result();
+            if (currShardConfig.configNum() == INITIAL_CONFIG_NUM && firstCommandSkipped) {
+                int groupID = getGroupIdForShard(skippedCommand.command());
+                broadcast(new ShardStoreRequest(skippedCommand), currShardConfig.groupInfo().get(groupID).getLeft());
+                this.set(new ClientTimer(skippedCommand, groupID), CLIENT_RETRY_MILLIS);
+                firstCommandSkipped = false;
+            }
         }
     }
 
@@ -108,22 +121,20 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
        -----------------------------------------------------------------------*/
     private synchronized void onClientTimer(ClientTimer t) {
         // Your code here...
-        if (seqNum == t.command().sequenceNum() && shardStoreReply == null) {
-            for (Address server : currShardConfig.groupInfo().get(t.groupID()).getLeft()) {
-                this.send(new ShardStoreRequest(t.command()), server);
-            }
+        if (currShardConfig.configNum() >= INITIAL_CONFIG_NUM
+                && seqNum == t.command().sequenceNum() && shardStoreReply == null) {
+            broadcast(new ShardStoreRequest(t.command()), currShardConfig.groupInfo().get(t.groupID()).getLeft());
             this.set(t, CLIENT_RETRY_MILLIS);
         }
     }
 
     private void onQueryTimer(QueryTimer t) {
-        for (Address shardMaster : shardMasters()) {
-            this.send(new PaxosRequest(new AMOCommand(new Query(-1), address(), -1)), shardMaster);
-        }
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), DUMMY_SEQ_NUM)));
         this.set(t, QUERY_RETRY_MILLIS);
     }
 
-    private int getGroupIdForShard(int shardNum) {
+    private int getGroupIdForShard(Command command) {
+        int shardNum = keyToShard(((SingleKeyCommand) command).key());
         for (int groupID : currShardConfig.groupInfo().keySet()) {
             if (currShardConfig.groupInfo().get(groupID).getRight().contains(shardNum)) return groupID;
         }

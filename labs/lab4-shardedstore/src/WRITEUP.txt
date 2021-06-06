@@ -19,3 +19,5 @@ Part2:
 2.1 ShardStoreClient:
 - get current ShardConfig to see which ReplicaGroup to send request
 - send ShardStoreRequest and handle ShardStoreResponse
+
+Two Applications: AMOApplication && ShardMaster

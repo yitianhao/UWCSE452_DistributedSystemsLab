@@ -21,6 +21,7 @@ import static dslabs.paxos.HeartbeatCheckTimer.HEARTBEAT_CHECK_MILLIS;
 import static dslabs.paxos.HeartbeatTimer.HEARTBEAT_MILLIS;
 import static dslabs.paxos.P1ATimer.P1A_RETRY_TIMER;
 import static dslabs.paxos.P2ATimer.P2A_RETRY_TIMER;
+import static dslabs.shardkv.ShardStoreServer.DUMMY_SEQ_NUM;
 
 @ToString(callSuper = true)
 @EqualsAndHashCode(callSuper = true)
@@ -213,8 +214,10 @@ public class PaxosServer extends Node {
     private void handlePaxosRequest(PaxosRequest m, Address sender) {
         // Your code here...
         // As a non-leader, need to drop client request
-        if (application.alreadyExecuted(m.amoCommand())) {
-            if (this.application != null) {
+        // System.out.println(m.toString());
+        // if (notHeardPrevReq(m.amoCommand().clientID(), m.amoCommand().sequenceNum())) return;
+        if (m.amoCommand().sequenceNum() != DUMMY_SEQ_NUM && application != null && application.alreadyExecuted(m.amoCommand())) {
+            if (application != null) {
                 AMOResult result = application.execute(m.amoCommand());
                 if (result.sequenceNum() == m.amoCommand().sequenceNum()) {
                     send(new PaxosReply(result), sender);
@@ -222,7 +225,7 @@ public class PaxosServer extends Node {
             } else {
                 handleMessage(new PaxosDecision(m.amoCommand()), shardStoreServer);
             }
-        } else if (leader && !oldRequest(sender, m.amoCommand().sequenceNum())) {
+        } else if (leader && (m.amoCommand().sequenceNum() == DUMMY_SEQ_NUM || !oldRequest(sender, m.amoCommand().sequenceNum()))) {
             if (servers.length == 1) {
                 log.put(slot_in, new LogEntry(ballot, PaxosLogSlotStatus.CHOSEN, m.amoCommand(), null));
                 executeChosen();

@@ -229,6 +229,9 @@ public class ShardStoreServer extends ShardStoreNode {
     }
 
     private void processNewConfigHelper(NewConfig nc) {
+        if (!currShardConfig.groupInfo().containsKey(groupId)) {
+            return;
+        }
         // clear out previous data
         HashSet<Integer> prevShardsOwned = new HashSet<>(shardsOwned);
         shardsOwned = new HashSet<>();
@@ -269,6 +272,10 @@ public class ShardStoreServer extends ShardStoreNode {
     }
 
     private void processAMOCommand(AMOCommand amoCommand, boolean replicated) {
+        if (!canServe(amoCommand.command())) {
+            return;
+        }
+
         if (!replicated) {
             paxosPropose(amoCommand);
             return;
@@ -278,6 +285,12 @@ public class ShardStoreServer extends ShardStoreNode {
         AMOResult result = app.execute(amoCommand);
         shardToApplication.put(shardNum, app);
         this.send(new ShardStoreReply(result), amoCommand.clientID());
+    }
+
+    private boolean canServe(Command command) {
+        return command instanceof SingleKeyCommand &&
+                currShardConfig.groupInfo().containsKey(groupId) &&
+                currShardConfig.groupInfo().get(groupId).getRight().contains(keyToShard(((SingleKeyCommand) command).key()));
     }
 
     @Data

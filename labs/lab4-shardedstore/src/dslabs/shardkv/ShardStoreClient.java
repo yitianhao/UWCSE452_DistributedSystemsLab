@@ -13,8 +13,11 @@ import dslabs.shardmaster.ShardMaster.Query;
 import dslabs.shardmaster.ShardMaster.ShardConfig;
 import dslabs.shardmaster.ShardMaster.ShardMasterResult;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
+import org.apache.commons.lang3.tuple.Pair;
 
 import static dslabs.shardkv.ClientTimer.CLIENT_RETRY_MILLIS;
 import static dslabs.shardkv.QueryTimer.QUERY_RETRY_MILLIS;
@@ -26,7 +29,7 @@ import static dslabs.shardmaster.ShardMaster.INITIAL_CONFIG_NUM;
 @EqualsAndHashCode(callSuper = true)
 public class ShardStoreClient extends ShardStoreNode implements Client {
     // Your code here...
-    private ShardConfig currShardConfig;
+    private ShardConfig currShardConfig = new ShardConfig(DUMMY_SEQ_NUM, new HashMap<>());
     private ShardStoreRequest shardStoreRequest;
     private ShardStoreReply shardStoreReply;
     private int seqNum;
@@ -44,7 +47,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     @Override
     public synchronized void init() {
         // Your code here...
-        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), DUMMY_SEQ_NUM)));
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(currShardConfig.configNum() + 1), address(), DUMMY_SEQ_NUM)));
         this.set(new QueryTimer(), QUERY_RETRY_MILLIS);
 
         currShardConfig = new ShardConfig(-1, new HashMap<>());

@@ -1,5 +1,6 @@
 package dslabs.shardkv;
 
+import com.google.common.collect.Sets;
 import dslabs.atmostonce.AMOApplication;
 import dslabs.atmostonce.AMOCommand;
 import dslabs.atmostonce.AMOResult;
@@ -13,12 +14,15 @@ import dslabs.paxos.PaxosServer;
 import dslabs.shardmaster.ShardMaster.Query;
 import dslabs.shardmaster.ShardMaster.ShardConfig;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 import static dslabs.shardkv.QueryTimer.QUERY_RETRY_MILLIS;
+import static dslabs.shardkv.ShardMoveTimer.SHARD_MOVE_RETRY_MILLIS;
 import static dslabs.shardmaster.ShardMaster.INITIAL_CONFIG_NUM;
 
 
@@ -33,8 +37,14 @@ public class ShardStoreServer extends ShardStoreNode {
     public static final int DUMMY_SEQ_NUM = -2;
     private Address paxosAddress;
     private Map<Integer, AMOApplication> shardToApplication = new HashMap<>();
+
+    // reconfiguration
+    // see slide P21 bottom
     private boolean inReConfig = false;
     private ShardConfig currShardConfig = new ShardConfig(DUMMY_SEQ_NUM, new HashMap<>());
+    private HashSet<Integer> shardsOwned = new HashSet<>();
+    private HashSet<Integer> shardsNeeded = new HashSet<>();
+    private HashMap<Integer, HashSet<Integer>> shardToMove = new HashMap<>();
 
     /* -------------------------------------------------------------------------
         Construction and initialization
@@ -62,7 +72,7 @@ public class ShardStoreServer extends ShardStoreNode {
         addSubNode(paxosServer);
         paxosServer.init();
 
-        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), DUMMY_SEQ_NUM)));
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(currShardConfig.configNum() + 1), address(), DUMMY_SEQ_NUM)));
         this.set(new QueryTimer(), QUERY_RETRY_MILLIS);
     }
 
@@ -123,6 +133,15 @@ public class ShardStoreServer extends ShardStoreNode {
         this.set(t, QUERY_RETRY_MILLIS);
     }
 
+    private void onShardMoveTimer(ShardMoveTimer t) {
+        // Retry sending these shards until you receive an Ack
+        if (shardToMove.containsKey(t.destGroupId())) {
+            ShardMove sm = new ShardMove(this.groupId, t.destGroupId(), currShardConfig.configNum(), t.shardsAndApp());
+            broadcast(new ShardMoveMsg(sm),currShardConfig.groupInfo().get(t.destGroupId()).getLeft());
+            this.set(t, SHARD_MOVE_RETRY_MILLIS);
+        }
+    }
+
     /* -------------------------------------------------------------------------
         Utils
        -----------------------------------------------------------------------*/
@@ -145,11 +164,36 @@ public class ShardStoreServer extends ShardStoreNode {
     }
 
     private void processShardMove(ShardMove sm, boolean replicated) {
+        if (sm.configNum != currShardConfig.configNum()) return;
 
+        if (!replicated) {
+            paxosPropose(sm);
+            return;
+        }
+
+        shardsNeeded.removeIf(n -> sm.shardsAndApp.keySet().contains(n));
+        for (int n : sm.shardsAndApp.keySet()) {
+            shardsOwned.add(n);
+            shardToApplication.put(n, sm.shardsAndApp.get(n));
+        }
+
+        ShardMoveAck sma = new ShardMoveAck(sm.startGroupId, sm.destGroupId, sm.configNum);
+        broadcast(new ShardMoveAckMsg(sma), currShardConfig.groupInfo().get(sm.startGroupId).getLeft());
+
+        inReConfig = false;
     }
 
     private void processShardMoveAck(ShardMoveAck sma, boolean replicated) {
+        if (sma.configNum != currShardConfig.configNum()) return;
 
+        if (!replicated) {
+            paxosPropose(sma);
+            return;
+        }
+
+        shardToMove.remove(sma.destGroupId);
+
+        inReConfig = false;
     }
 
     private void processNewConfig(NewConfig nc, boolean replicated) {
@@ -157,13 +201,63 @@ public class ShardStoreServer extends ShardStoreNode {
             paxosPropose(nc);
             return;
         }
-        currShardConfig = nc.shardConfig;
+
         // first time
-        for (int shardNum : currShardConfig.groupInfo().get(groupId).getRight()) {
-            AMOApplication app = new AMOApplication(new KVStore());
-            shardToApplication.put(shardNum, app);
+        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM) {
+            for (int shardNum : nc.shardConfig.groupInfo().get(groupId).getRight()) {
+                AMOApplication app = new AMOApplication(new KVStore());
+                shardToApplication.put(shardNum, app);
+            }
+            inReConfig = false;
+        } else {
+            processNewConfigHelper(nc);
+            // Send Shards to the Paxos Replica Group responsible for the Shard in the new configuration
+            for (Integer destGroupId : shardToMove.keySet()) {
+                HashMap<Integer, AMOApplication> shardsAndApp = new HashMap<>();
+                for (Integer shard : shardToMove.get(destGroupId)) {
+                    shardsAndApp.put(shard, shardToApplication.get(shard));
+                    shardToApplication.remove(shard);
+                }
+                ShardMove sm = new ShardMove(this.groupId, destGroupId, nc.shardConfig.configNum(), shardsAndApp);
+                broadcast(new ShardMoveMsg(sm), nc.shardConfig.groupInfo().get(destGroupId).getLeft());
+                this.set(new ShardMoveTimer(destGroupId, nc.shardConfig.configNum(), shardsAndApp), SHARD_MOVE_RETRY_MILLIS);
+            }
         }
-        inReConfig = false;
+        currShardConfig = nc.shardConfig;
+    }
+
+    private void processNewConfigHelper(NewConfig nc) {
+        // clear out previous data
+        HashSet<Integer> prevShardsOwned = new HashSet<>(shardsOwned);
+        shardsOwned = new HashSet<>();
+        shardToMove = new HashMap<>();
+        shardsNeeded = new HashSet<>();
+
+        Set<Integer> currShouldOwned = nc.shardConfig.groupInfo().get(groupId).getRight();
+        Set<Integer> prevOwned = currShardConfig.groupInfo().get(groupId).getRight();
+        for (Integer n : currShouldOwned) {
+            // previous owned && current should owned
+            if (prevOwned.contains(n)) shardsOwned.add(n);
+            // previous not owned && current should owned
+            else shardsNeeded.add(n);
+        }
+
+        // previous owned && current should not owned, specify to its destinations
+        Set<Integer> toMove = Sets.difference(prevShardsOwned, shardsOwned);
+        for (int groupId : nc.shardConfig.groupInfo().keySet()) {
+            if (groupId != this.groupId) { // for all other groups
+                // all its needs
+                Set<Integer> totalShardNeededForGroupId = nc.shardConfig.groupInfo().get(groupId).getRight();
+                // needed shards that can be moved from here
+                HashSet<Integer> shardNeededForGroupId = new HashSet<>();
+                for (int n : toMove) {
+                    if (totalShardNeededForGroupId.contains(n)) {
+                        shardNeededForGroupId.add(n);
+                    }
+                }
+                if (!shardNeededForGroupId.isEmpty()) shardToMove.put(groupId, shardNeededForGroupId);
+            }
+        }
     }
 
     private void paxosPropose(Command command) {
@@ -178,7 +272,6 @@ public class ShardStoreServer extends ShardStoreNode {
             return;
         }
         int shardNum = keyToShard(((SingleKeyCommand)amoCommand.command()).key());
-        //System.out.println("key = " + ((SingleKeyCommand)amoCommand.command()).key() + " | shard = " + shardNum);
         AMOApplication app = shardToApplication.get(shardNum);
         AMOResult result = app.execute(amoCommand);
         shardToApplication.put(shardNum, app);
@@ -187,20 +280,21 @@ public class ShardStoreServer extends ShardStoreNode {
 
     @Data
     final class ShardMove implements Command {
-
+        private final Integer startGroupId;
+        private final Integer destGroupId;
+        private final Integer configNum;
+        private final HashMap<Integer, AMOApplication> shardsAndApp;
     }
 
     @Data
     final class ShardMoveAck implements Command {
-
+        private final Integer startGroupId;
+        private final Integer destGroupId;
+        private final Integer configNum;
     }
 
     @Data
     public static final class NewConfig implements Command {
-//        private final int configNum;
-//
-//        // groupId -> <group members, shard numbers>
-//        private final Map<Integer, Pair<Set<Address>, Set<Integer>>> groupInfo;
         private final ShardConfig shardConfig;
 
     }

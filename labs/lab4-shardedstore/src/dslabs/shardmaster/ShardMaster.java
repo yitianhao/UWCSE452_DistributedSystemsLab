@@ -104,8 +104,9 @@ public final class ShardMaster implements Application {
                 shardConfigHistory.put(nextConfigNum, new ShardConfig(nextConfigNum, groupInfo));
                 res = new Ok();
             } else {
-                int prevCN = reBalance() ? nextConfigNum : nextConfigNum - 1;
-                join(join, prevCN);
+//                int prevCN = reBalance() ? nextConfigNum : nextConfigNum - 1;
+//                join(join, prevCN);
+                joinHelper(join);
                 res = new Ok();
             }
             nextConfigNum += 1;
@@ -177,6 +178,7 @@ public final class ShardMaster implements Application {
     private boolean reBalance() {
         boolean reBalanced = false;
         Map<Integer, Pair<Set<Address>, Set<Integer>>> latestGroupInfo = shardConfigHistory.get(nextConfigNum - 1).groupInfo;
+        System.out.println(latestGroupInfo.toString());
         Map<Integer, Pair<Set<Address>, Set<Integer>>> newGroupInfo = new HashMap<>();
         int nextLoadPerGroup = numShards / latestGroupInfo.size();
         int left = numShards - nextLoadPerGroup * latestGroupInfo.size();
@@ -235,6 +237,47 @@ public final class ShardMaster implements Application {
             newGroupInfo.put(groupID, Pair.of(setDeepCopy(latestGroupInfo.get(groupID).getLeft()), newSharedNums));
         }
         newGroupInfo.put(joinCommand.groupId(), Pair.of(setDeepCopy(joinCommand.servers()), newGroupShardNums));
+        ShardConfig nextShardConfig = new ShardConfig(nextConfigNum, newGroupInfo);
+        shardConfigHistory.put(nextConfigNum, nextShardConfig);
+    }
+
+    private void joinHelper(Join joinCommand) {
+        Map<Integer, Pair<Set<Address>, Set<Integer>>> latestGroupInfo = shardConfigHistory.get(nextConfigNum - 1).groupInfo;
+        //System.out.println(latestGroupInfo.toString());
+        Map<Integer, Pair<Set<Address>, Set<Integer>>> newGroupInfo = new HashMap<>();
+        int nextAverageLoad = numShards / (latestGroupInfo.size() + 1);
+        int reminder = numShards % (latestGroupInfo.size() + 1);
+        HashMap<Integer, Integer> groupIdToNumShards = new HashMap<>();
+        HashSet<Integer> toBeAssign = new HashSet<>();
+
+        for (int groupId : latestGroupInfo.keySet()) {
+            int actualNextLoad = (reminder > 0 ? nextAverageLoad + 1 : nextAverageLoad);
+            groupIdToNumShards.put(groupId, actualNextLoad);
+            reminder--;
+
+            Set<Integer> shardNums = latestGroupInfo.get(groupId).getRight();
+            Set<Integer> newSharedNums = new HashSet<>(shardNums);
+            while (newSharedNums.size() > actualNextLoad) {
+                Integer toTransfer = Collections.max(newSharedNums);
+                newSharedNums.remove(toTransfer);
+                toBeAssign.add(toTransfer);
+            }
+            newGroupInfo.put(groupId, Pair.of(setDeepCopy(latestGroupInfo.get(groupId).getLeft()), newSharedNums));
+        }
+        int actualNextLoad = (reminder > 0 ? nextAverageLoad + 1 : nextAverageLoad);
+        groupIdToNumShards.put(joinCommand.groupId(), actualNextLoad);
+        newGroupInfo.put(joinCommand.groupId(), Pair.of(setDeepCopy(joinCommand.servers()), new HashSet<>()));
+
+
+        for (int groupId : groupIdToNumShards.keySet()) {
+            while (groupIdToNumShards.get(groupId) > newGroupInfo.get(groupId).getRight().size()) {
+                Integer toTransfer = Collections.max(toBeAssign);
+                newGroupInfo.get(groupId).getRight().add(toTransfer);
+                toBeAssign.remove(toTransfer);
+            }
+        }
+
+        //System.out.println(newGroupInfo.toString());
         ShardConfig nextShardConfig = new ShardConfig(nextConfigNum, newGroupInfo);
         shardConfigHistory.put(nextConfigNum, nextShardConfig);
     }

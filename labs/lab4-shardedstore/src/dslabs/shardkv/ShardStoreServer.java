@@ -96,7 +96,9 @@ public class ShardStoreServer extends ShardStoreNode {
     // TODO
     // Receive PaxosReply from the ShardMaster, informing about the new configs
     private void handlePaxosReply(PaxosReply m, Address sender) {
-        if (m.result().result() instanceof ShardConfig && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())) {
+        if (m.result().result() instanceof ShardConfig
+                && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())
+                && !inReConfig) {
             inReConfig = true;
             process(new NewConfig((ShardConfig) m.result().result()), false);
         }
@@ -171,8 +173,8 @@ public class ShardStoreServer extends ShardStoreNode {
             return;
         }
 
-        shardsNeeded.removeIf(n -> sm.shardsAndApp.keySet().contains(n));
         for (int n : sm.shardsAndApp.keySet()) {
+            shardsNeeded.remove(n);
             shardsOwned.add(n);
             shardToApplication.put(n, sm.shardsAndApp.get(n));
         }
@@ -180,7 +182,7 @@ public class ShardStoreServer extends ShardStoreNode {
         ShardMoveAck sma = new ShardMoveAck(sm.startGroupId, sm.destGroupId, sm.configNum);
         broadcast(new ShardMoveAckMsg(sma), currShardConfig.groupInfo().get(sm.startGroupId).getLeft());
 
-        inReConfig = false;
+        if (shardToMove.isEmpty() && shardsNeeded.isEmpty()) inReConfig = false;
     }
 
     private void processShardMoveAck(ShardMoveAck sma, boolean replicated) {
@@ -193,7 +195,7 @@ public class ShardStoreServer extends ShardStoreNode {
 
         shardToMove.remove(sma.destGroupId);
 
-        inReConfig = false;
+        if (shardToMove.isEmpty() && shardsNeeded.isEmpty()) inReConfig = false;
     }
 
     private void processNewConfig(NewConfig nc, boolean replicated) {
@@ -203,13 +205,13 @@ public class ShardStoreServer extends ShardStoreNode {
         }
 
         // first time
-        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM) {
+        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM && nc.shardConfig.groupInfo().containsKey(groupId)) {
             for (int shardNum : nc.shardConfig.groupInfo().get(groupId).getRight()) {
                 AMOApplication app = new AMOApplication(new KVStore());
                 shardToApplication.put(shardNum, app);
             }
             inReConfig = false;
-        } else {
+        } else if (nc.shardConfig.groupInfo().containsKey(groupId)) {
             processNewConfigHelper(nc);
             // Send Shards to the Paxos Replica Group responsible for the Shard in the new configuration
             for (Integer destGroupId : shardToMove.keySet()) {
@@ -243,7 +245,7 @@ public class ShardStoreServer extends ShardStoreNode {
         }
 
         // previous owned && current should not owned, specify to its destinations
-        Set<Integer> toMove = Sets.difference(prevShardsOwned, shardsOwned);
+        Set<Integer> toMove = Sets.difference(prevShardsOwned, shardsOwned); // shards currently not owned
         for (int groupId : nc.shardConfig.groupInfo().keySet()) {
             if (groupId != this.groupId) { // for all other groups
                 // all its needs

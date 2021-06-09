@@ -8,8 +8,10 @@ import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Message;
 import dslabs.framework.Node;
+import dslabs.framework.Result;
 import dslabs.kvstore.KVStore.SingleKeyCommand;
 import dslabs.shardkv.PaxosDecision;
+import dslabs.shardmaster.ShardMaster.Query;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
@@ -215,12 +217,17 @@ public class PaxosServer extends Node {
     private void handlePaxosRequest(PaxosRequest m, Address sender) {
         // Your code here...
         // As a non-leader, need to drop client request
+        if (application != null && m.amoCommand().command().readOnly()) {
+            Result result = application.executeReadOnly(m.amoCommand().command());
+            send(new PaxosReply(new AMOResult(result, m.amoCommand().sequenceNum())), sender);
+            return;
+        }
         if (application != null && application.alreadyExecuted(m.amoCommand())) {
             AMOResult result = application.execute(m.amoCommand());
             if (result.sequenceNum() == m.amoCommand().sequenceNum()) {
                 send(new PaxosReply(result), sender);
             }
-        } else if (leader && (m.amoCommand().sequenceNum() == DUMMY_SEQ_NUM || !oldRequest(sender, m.amoCommand().sequenceNum()))) {
+        } else if (leader && !oldRequest(sender, m.amoCommand().sequenceNum())) {
             if (servers.length == 1) {
                 log.put(slot_in, new LogEntry(ballot, PaxosLogSlotStatus.CHOSEN, m.amoCommand(), null));
                 executeChosen();
@@ -415,6 +422,17 @@ public class PaxosServer extends Node {
 //                        System.out.println(amoCommand);
 //                        System.out.println(result.toString());
 //                        System.out.println();
+//                    }
+//                    if (amoCommand.command() instanceof Query) {
+//                        if (amoCommand.clientID().toString().startsWith("server")) {
+//                            System.out.println("SERVER!");
+//                            System.out.println(amoCommand);
+//                            System.out.println(result.toString());
+//                        } else if (amoCommand.clientID().toString().startsWith("client")) {
+//                            System.out.println("CLIENT!");
+//                            System.out.println(amoCommand);
+//                            System.out.println(result.toString());
+//                        }
 //                    }
                     send(new PaxosReply(result), amoCommand.clientID());
                 } else {

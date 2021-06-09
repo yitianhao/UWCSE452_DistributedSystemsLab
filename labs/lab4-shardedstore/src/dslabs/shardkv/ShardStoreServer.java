@@ -104,7 +104,7 @@ public class ShardStoreServer extends ShardStoreNode {
 //                && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())) {
 //            System.out.println(((ShardConfig) m.result().result()));
 //        }
-        // System.out.println(m.result());
+        //System.out.println(m.result());
         if (m.result().result() instanceof ShardConfig
                 && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())
                 && !inReConfig) {
@@ -141,6 +141,7 @@ public class ShardStoreServer extends ShardStoreNode {
     // Your code here...
     private void onQueryTimer(QueryTimer t) {
         // if (this.groupId == 2) System.out.println(shardToApplication);
+        //System.out.println("!!!!!!configNum" + currShardConfig.configNum());
         broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(currShardConfig.configNum() + 1), address(), DUMMY_SEQ_NUM)));
         this.set(t, QUERY_RETRY_MILLIS);
     }

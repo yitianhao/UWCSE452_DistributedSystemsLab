@@ -89,6 +89,10 @@ public class ShardStoreServer extends ShardStoreNode {
         // Your code here...
         if (!inReConfig && currShardConfig.configNum() >= INITIAL_CONFIG_NUM) {
             process(m.command(), false);
+        } else {
+//            System.out.println(inReConfig);
+//            System.out.println("currShardConfig.configNum() >= INITIAL_CONFIG_NUM = " + (currShardConfig.configNum() >= INITIAL_CONFIG_NUM));
+//            System.out.println(m);
         }
     }
 
@@ -96,6 +100,11 @@ public class ShardStoreServer extends ShardStoreNode {
     // TODO
     // Receive PaxosReply from the ShardMaster, informing about the new configs
     private void handlePaxosReply(PaxosReply m, Address sender) {
+//        if (inReConfig && m.result().result() instanceof ShardConfig
+//                && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())) {
+//            System.out.println(((ShardConfig) m.result().result()));
+//        }
+        // System.out.println(m.result());
         if (m.result().result() instanceof ShardConfig
                 && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())
                 && !inReConfig) {
@@ -131,7 +140,8 @@ public class ShardStoreServer extends ShardStoreNode {
        -----------------------------------------------------------------------*/
     // Your code here...
     private void onQueryTimer(QueryTimer t) {
-        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), DUMMY_SEQ_NUM)));
+        // if (this.groupId == 2) System.out.println(shardToApplication);
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(currShardConfig.configNum() + 1), address(), DUMMY_SEQ_NUM)));
         this.set(t, QUERY_RETRY_MILLIS);
     }
 
@@ -199,19 +209,21 @@ public class ShardStoreServer extends ShardStoreNode {
     }
 
     private void processNewConfig(NewConfig nc, boolean replicated) {
+        if (!nc.shardConfig.groupInfo().containsKey(groupId)) return;
+
         if (!replicated) {
             paxosPropose(nc);
             return;
         }
 
         // first time
-        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM && nc.shardConfig.groupInfo().containsKey(groupId)) {
+        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM) {
             for (int shardNum : nc.shardConfig.groupInfo().get(groupId).getRight()) {
                 AMOApplication app = new AMOApplication(new KVStore());
                 shardToApplication.put(shardNum, app);
             }
             inReConfig = false;
-        } else if (nc.shardConfig.groupInfo().containsKey(groupId)) {
+        } else {
             processNewConfigHelper(nc);
             // Send Shards to the Paxos Replica Group responsible for the Shard in the new configuration
             for (Integer destGroupId : shardToMove.keySet()) {
@@ -229,9 +241,8 @@ public class ShardStoreServer extends ShardStoreNode {
     }
 
     private void processNewConfigHelper(NewConfig nc) {
-        if (!currShardConfig.groupInfo().containsKey(groupId)) {
-            return;
-        }
+        if (!currShardConfig.groupInfo().containsKey(groupId)) return;
+
         // clear out previous data
         HashSet<Integer> prevShardsOwned = new HashSet<>(shardsOwned);
         shardsOwned = new HashSet<>();
@@ -272,9 +283,7 @@ public class ShardStoreServer extends ShardStoreNode {
     }
 
     private void processAMOCommand(AMOCommand amoCommand, boolean replicated) {
-        if (!canServe(amoCommand.command())) {
-            return;
-        }
+        if (!canServeAMOCommand(amoCommand.command())) return;
 
         if (!replicated) {
             paxosPropose(amoCommand);
@@ -287,10 +296,11 @@ public class ShardStoreServer extends ShardStoreNode {
         this.send(new ShardStoreReply(result), amoCommand.clientID());
     }
 
-    private boolean canServe(Command command) {
-        return command instanceof SingleKeyCommand &&
-                currShardConfig.groupInfo().containsKey(groupId) &&
-                currShardConfig.groupInfo().get(groupId).getRight().contains(keyToShard(((SingleKeyCommand) command).key()));
+    private boolean canServeAMOCommand(Command command) {
+        return command instanceof SingleKeyCommand
+                && currShardConfig.groupInfo().containsKey(groupId)
+                && currShardConfig.groupInfo().get(groupId).getRight().contains(keyToShard(((SingleKeyCommand) command).key()))
+                && shardToApplication.containsKey(keyToShard(((SingleKeyCommand)command).key()));
     }
 
     @Data

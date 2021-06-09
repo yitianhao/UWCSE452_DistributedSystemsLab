@@ -165,6 +165,7 @@ public final class ShardMaster implements Application {
             // Your code here...
             if (shardConfigHistory.isEmpty()) return new Error();
             else if (query.configNum() == -1 || query.configNum() > nextConfigNum - 1) {
+                // System.out.println(shardConfigHistory.get(nextConfigNum - 1));
                 return shardConfigHistory.get(nextConfigNum - 1);
             } else {
                 return shardConfigHistory.get(query.configNum());

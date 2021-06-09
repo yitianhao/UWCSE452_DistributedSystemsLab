@@ -145,11 +145,15 @@ public final class ShardStorePart1Test extends ShardStoreBaseTest {
         // Add group and then kill group 1 servers
         joinGroup(2, numServersPerGroup);
 
+        System.out.println("___________________________________________________________");
+
         Thread.sleep(5000);
 
         for (int i = 1; i <= numServersPerGroup; i++) {
             runState.removeNode(server(1, i));
         }
+
+        System.out.println("___________________________________________________________");
 
         // Add a client for each shard
         int i = 2;

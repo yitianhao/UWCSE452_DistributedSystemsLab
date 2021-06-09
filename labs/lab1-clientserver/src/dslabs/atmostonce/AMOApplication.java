@@ -62,6 +62,8 @@ public final class AMOApplication<T extends Application>
 
         AMOCommand amoCommand = (AMOCommand) command;
 
+        if (((AMOCommand) command).command().readOnly()) executeReadOnly(((AMOCommand) command).command());
+
         // Your code here...
         if (alreadyExecuted(amoCommand)) {
             return new AMOResult(bookkeeping.get(amoCommand.clientID()).result, amoCommand.sequenceNum());

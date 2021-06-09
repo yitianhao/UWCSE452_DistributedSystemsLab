@@ -8,6 +8,7 @@ import dslabs.framework.Application;
 import dslabs.framework.Command;
 import dslabs.framework.Message;
 import dslabs.framework.Node;
+import dslabs.kvstore.KVStore.SingleKeyCommand;
 import dslabs.shardkv.PaxosDecision;
 import java.io.Serializable;
 import java.util.Collections;
@@ -409,6 +410,12 @@ public class PaxosServer extends Node {
             if (amoCommand != null) {  // in the case of no-op
                 if (this.application != null) {
                     AMOResult result = application.execute(amoCommand);
+//                    if (amoCommand.sequenceNum() >= 0) {
+//                        System.out.println(application);
+//                        System.out.println(amoCommand);
+//                        System.out.println(result.toString());
+//                        System.out.println();
+//                    }
                     send(new PaxosReply(result), amoCommand.clientID());
                 } else {
                     handleMessage(new PaxosDecision(amoCommand), shardStoreServer);

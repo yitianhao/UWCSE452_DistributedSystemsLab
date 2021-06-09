@@ -50,7 +50,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
         broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(currShardConfig.configNum() + 1), address(), DUMMY_SEQ_NUM)));
         this.set(new QueryTimer(), QUERY_RETRY_MILLIS);
 
-        currShardConfig = new ShardConfig(-1, new HashMap<>());
+        currShardConfig = new ShardConfig(DUMMY_SEQ_NUM, new HashMap<>());
     }
 
     /* -------------------------------------------------------------------------
@@ -108,10 +108,13 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     // Your code here...
     private synchronized void handlePaxosReply(PaxosReply m, Address sender) {
         if (m != null && m.result() != null && m.result().result() instanceof ShardConfig &&
-                ((ShardConfig) m.result().result()).configNum() >= currShardConfig.configNum()) {
+                ((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum()) {
             currShardConfig = (ShardConfig) m.result().result();
+            //System.out.println(currShardConfig);
             if (currShardConfig.configNum() == INITIAL_CONFIG_NUM && firstCommandSkipped) {
-                //System.out.println(skippedCommand.toString());
+//                System.out.println(skippedCommand.toString());
+//                System.out.println("client re-propose!");
+//                System.out.println(skippedCommand.toString());
                 int groupID = getGroupIdForShard(skippedCommand.command());
                 broadcast(new ShardStoreRequest(skippedCommand), currShardConfig.groupInfo().get(groupID).getLeft());
                 this.set(new ClientTimer(skippedCommand, groupID), CLIENT_RETRY_MILLIS);
@@ -133,7 +136,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     }
 
     private void onQueryTimer(QueryTimer t) {
-        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), DUMMY_SEQ_NUM)));
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(currShardConfig.configNum() + 1), address(), DUMMY_SEQ_NUM)));
         this.set(t, QUERY_RETRY_MILLIS);
     }
 

@@ -25,6 +25,12 @@ Design:
 June 8
 1. [slide p22] The number that SSClient and SSServer should query on (periodically) should not be -1,
    instead should be next possible configNum.
+2. [slide p39] Update ShardMaster.join()
+
+June 9
+1. [NPE] add another condition to SSS.canServeAMOCommand()
+2. [slide p38] Add in AMOApplication: Check if command.readOnly() and use app.executeReadOnly
+3.
 
 TODO:
 1. read-only command like query (otherwise explode)

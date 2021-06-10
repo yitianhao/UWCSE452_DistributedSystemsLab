@@ -47,7 +47,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     @Override
     public synchronized void init() {
         // Your code here...
-        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(currShardConfig.configNum() + 1), address(), DUMMY_SEQ_NUM)));
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), DUMMY_SEQ_NUM)));
         this.set(new QueryTimer(), QUERY_RETRY_MILLIS);
 
         currShardConfig = new ShardConfig(DUMMY_SEQ_NUM, new HashMap<>());
@@ -59,12 +59,17 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     @Override
     public synchronized void sendCommand(Command command) {
         // Your code here...
+        //System.out.println(command);
         AMOCommand amoCommand = new AMOCommand(command, this.address(), seqNum);
         shardStoreRequest = new ShardStoreRequest(amoCommand);
         shardStoreReply = null;
 
+
         if (currShardConfig.configNum() >= INITIAL_CONFIG_NUM) {
             //System.out.println(amoCommand.toString());
+            //if (!address().toString().startsWith("client1")) {
+               // System.out.println(amoCommand);
+            //}
             int groupID = getGroupIdForShard(command);
             broadcast(new ShardStoreRequest(amoCommand), currShardConfig.groupInfo().get(groupID).getLeft());
             this.set(new ClientTimer(amoCommand, groupID), CLIENT_RETRY_MILLIS);
@@ -110,8 +115,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
         if (m != null && m.result() != null && m.result().result() instanceof ShardConfig &&
                 ((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum()) {
             currShardConfig = (ShardConfig) m.result().result();
-            //System.out.println(currShardConfig);
-            if (currShardConfig.configNum() == INITIAL_CONFIG_NUM && firstCommandSkipped) {
+            if (firstCommandSkipped) {
 //                System.out.println(skippedCommand.toString());
 //                System.out.println("client re-propose!");
 //                System.out.println(skippedCommand.toString());
@@ -129,6 +133,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     private synchronized void onClientTimer(ClientTimer t) {
         // Your code here...
         if (currShardConfig.configNum() >= INITIAL_CONFIG_NUM
+                //&& currShardConfig.groupInfo().containsKey(t.groupID())
                 && seqNum == t.command().sequenceNum() && shardStoreReply == null) {
             broadcast(new ShardStoreRequest(t.command()), currShardConfig.groupInfo().get(t.groupID()).getLeft());
             this.set(t, CLIENT_RETRY_MILLIS);
@@ -136,7 +141,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
     }
 
     private void onQueryTimer(QueryTimer t) {
-        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(currShardConfig.configNum() + 1), address(), DUMMY_SEQ_NUM)));
+        broadcastToShardMasters(new PaxosRequest(new AMOCommand(new Query(-1), address(), DUMMY_SEQ_NUM)));
         this.set(t, QUERY_RETRY_MILLIS);
     }
 

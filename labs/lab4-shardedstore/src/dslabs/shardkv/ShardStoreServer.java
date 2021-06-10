@@ -96,13 +96,14 @@ public class ShardStoreServer extends ShardStoreNode {
     // TODO
     // Receive PaxosReply from the ShardMaster, informing about the new configs
     private void handlePaxosReply(PaxosReply m, Address sender) {
-//        if (groupId == 2 && m.result().result() instanceof ShardConfig) {
-//            System.out.println((ShardConfig) m.result().result());
-//        }
+        if (groupId == 2 && m.result().result() instanceof ShardConfig && ((ShardConfig) m.result().result()).configNum() == 2) {
+            System.out.println((ShardConfig) m.result().result());
+            System.out.println(inReConfig);
+        }
         if (m.result().result() instanceof ShardConfig
                 && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())
                 && !inReConfig) {
-            //if (groupId == 2) System.out.println((ShardConfig) m.result().result());
+            //if (groupId == 1) System.out.println((ShardConfig) m.result().result());
             inReConfig = true;
             process(new NewConfig((ShardConfig) m.result().result()), false);
         }
@@ -194,15 +195,26 @@ public class ShardStoreServer extends ShardStoreNode {
 //            System.out.println(shardsOwned);
 //        }
 
+//        if (groupId == 3) {
+//            System.out.println(groupId);
+//            System.out.println(currShardConfig);
+//            System.out.println(shardsOwned);
+//            System.out.println(shardsNeeded);
+//            System.out.println(shardToApplication);
+//        }
+
         ShardMoveAck sma = new ShardMoveAck(sm.startGroupId, sm.destGroupId, sm.configNum);
         broadcast(new ShardMoveAckMsg(sma), sm.startGroupAddresses);
 
         if (shardToMove.isEmpty() && shardsNeeded.isEmpty()) {
             inReConfig = false;
-//            System.out.println(groupId);
-//            System.out.println(currShardConfig);
-//            System.out.println(shardsOwned);
-//            System.out.println(shardToApplication);
+//            if (groupId == 3) {
+//                System.out.println(groupId);
+//                System.out.println(currShardConfig);
+//                System.out.println(shardsOwned);
+//                System.out.println(shardsNeeded);
+//                System.out.println(shardToApplication);
+//            }
         }
     }
 
@@ -216,12 +228,15 @@ public class ShardStoreServer extends ShardStoreNode {
 
         shardToMove.remove(sma.destGroupId);
 
-        if (shardToMove.isEmpty() && shardsNeeded.isEmpty()) {
+        if (shardToMove.isEmpty() && shardsNeeded.isEmpty() && groupId == 2) {
             inReConfig = false;
-//            System.out.println(groupId);
-//            System.out.println(currShardConfig);
-//            System.out.println(shardsOwned);
-//            System.out.println(shardToApplication);
+//            if (groupId == 3) {
+//                System.out.println(groupId);
+//                System.out.println(currShardConfig);
+//                System.out.println(shardsOwned);
+//                System.out.println(shardsNeeded);
+//                System.out.println(shardToApplication);
+//            }
         }
     }
 
@@ -265,12 +280,10 @@ public class ShardStoreServer extends ShardStoreNode {
             }
         }
         currShardConfig = nc.shardConfig;
-        //if (groupId == 2) System.out.println(currShardConfig);
+        //if (groupId == 1) System.out.println(shardToMove);
     }
 
     private void processNewConfigHelper(NewConfig nc) {
-        if (!currShardConfig.groupInfo().containsKey(groupId)) return;
-
         // clear out previous data
         HashSet<Integer> prevShardsOwned = new HashSet<>(shardsOwned);
         shardsOwned = new HashSet<>();
@@ -278,13 +291,18 @@ public class ShardStoreServer extends ShardStoreNode {
         shardsNeeded = new HashSet<>();
 
         Set<Integer> currShouldOwned = nc.shardConfig.groupInfo().containsKey(groupId) ? nc.shardConfig.groupInfo().get(groupId).getRight() : new HashSet<>();
-        Set<Integer> prevOwned = currShardConfig.groupInfo().get(groupId).getRight();
+        Set<Integer> prevOwned = currShardConfig.groupInfo().containsKey(groupId) ? currShardConfig.groupInfo().get(groupId).getRight() : new HashSet<>();
         for (Integer n : currShouldOwned) {
             // previous owned && current should owned
             if (prevOwned.contains(n)) shardsOwned.add(n);
             // previous not owned && current should owned
             else shardsNeeded.add(n);
         }
+
+//        if (groupId == 3) {
+//            System.out.println(nc);
+//            System.out.println(shardsNeeded);
+//        }
 
         // previous owned && current should not owned, specify to its destinations
         HashSet<Integer> toMove = new HashSet<>(prevShardsOwned);

@@ -61,7 +61,7 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
         // Your code here...
         //System.out.println(command);
         AMOCommand amoCommand = new AMOCommand(command, this.address(), seqNum);
-        shardStoreRequest = new ShardStoreRequest(amoCommand);
+        shardStoreRequest = new ShardStoreRequest(amoCommand, currShardConfig.configNum());
         shardStoreReply = null;
 
 
@@ -71,8 +71,8 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
                // System.out.println(amoCommand);
             //}
             int groupID = getGroupIdForShard(command);
-            broadcast(new ShardStoreRequest(amoCommand), currShardConfig.groupInfo().get(groupID).getLeft());
-            this.set(new ClientTimer(amoCommand, groupID), CLIENT_RETRY_MILLIS);
+            broadcast(new ShardStoreRequest(amoCommand, currShardConfig.configNum()), currShardConfig.groupInfo().get(groupID).getLeft());
+            this.set(new ClientTimer(amoCommand, groupID, currShardConfig.configNum()), CLIENT_RETRY_MILLIS);
         } else {
             skippedCommand = amoCommand;
             firstCommandSkipped = true;
@@ -121,8 +121,8 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
 //                System.out.println("client re-propose!");
 //                System.out.println(skippedCommand.toString());
                 int groupID = getGroupIdForShard(skippedCommand.command());
-                broadcast(new ShardStoreRequest(skippedCommand), currShardConfig.groupInfo().get(groupID).getLeft());
-                this.set(new ClientTimer(skippedCommand, groupID), CLIENT_RETRY_MILLIS);
+                broadcast(new ShardStoreRequest(skippedCommand, currShardConfig.configNum()), currShardConfig.groupInfo().get(groupID).getLeft());
+                this.set(new ClientTimer(skippedCommand, groupID, currShardConfig.configNum()), CLIENT_RETRY_MILLIS);
                 firstCommandSkipped = false;
             }
         }
@@ -135,13 +135,13 @@ public class ShardStoreClient extends ShardStoreNode implements Client {
         // Your code here...
         if (currShardConfig.configNum() >= INITIAL_CONFIG_NUM
                 && seqNum == t.command().sequenceNum() && shardStoreReply == null) {
-            if (currShardConfig.groupInfo().containsKey(t.groupID())) {
-                broadcast(new ShardStoreRequest(t.command()), currShardConfig.groupInfo().get(t.groupID()).getLeft());
+            if (currShardConfig.configNum() == t.configNum()) {
+                broadcast(new ShardStoreRequest(t.command(), t.configNum()), currShardConfig.groupInfo().get(t.groupID()).getLeft());
                 this.set(t, CLIENT_RETRY_MILLIS);
             } else {
                 int groupID = getGroupIdForShard(t.command().command());
-                broadcast(new ShardStoreRequest(t.command()), currShardConfig.groupInfo().get(groupID).getLeft());
-                this.set(new ClientTimer(t.command(), groupID), CLIENT_RETRY_MILLIS);
+                broadcast(new ShardStoreRequest(t.command(), currShardConfig.configNum()), currShardConfig.groupInfo().get(groupID).getLeft());
+                this.set(new ClientTimer(t.command(), groupID, currShardConfig.configNum()), CLIENT_RETRY_MILLIS);
             }
         }
     }

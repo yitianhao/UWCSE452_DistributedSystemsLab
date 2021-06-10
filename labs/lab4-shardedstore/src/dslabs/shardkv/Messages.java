@@ -11,6 +11,7 @@ import lombok.Data;
 final class ShardStoreRequest implements Message {
     // Your code here...
     private final AMOCommand command;
+    private final int configNum;
 }
 
 @Data

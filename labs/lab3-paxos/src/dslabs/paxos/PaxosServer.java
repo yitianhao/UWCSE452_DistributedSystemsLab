@@ -307,13 +307,11 @@ public class PaxosServer extends Node {
     private void clearGarbage(int minSlotOut) {
         int minSlotNotCleared = log.keySet().size() > 0 ? Collections.min(log.keySet()) : 1;
         for (; minSlotNotCleared < minSlotOut; minSlotNotCleared++) {
-            // send back to ShardStoreServer
-//            if (log.get(minSlotNotCleared) != null) {
-//                handleMessage(new PaxosDecision(log.get(minSlotNotCleared).command), shardStoreServer);
-//            } else {
-//                System.out.println("NULL!!!!");
+//            AMOCommand amoCommand = log.get(minSlotNotCleared).command;
+//            if (this.application != null && amoCommand != null) {
+//                AMOResult result = application.execute(amoCommand);
+//                send(new PaxosReply(result), amoCommand.clientID());
 //            }
-//            System.out.println(log.get(minSlotNotCleared).toString());
             log.remove(minSlotNotCleared);
         }
         firstNonCleared = Math.max(firstNonCleared, minSlotOut);
@@ -417,23 +415,6 @@ public class PaxosServer extends Node {
             if (amoCommand != null) {  // in the case of no-op
                 if (this.application != null) {
                     AMOResult result = application.execute(amoCommand);
-//                    if (amoCommand.sequenceNum() >= 0) {
-//                        System.out.println(application);
-//                        System.out.println(amoCommand);
-//                        System.out.println(result.toString());
-//                        System.out.println();
-//                    }
-//                    if (amoCommand.command() instanceof Query) {
-//                        if (amoCommand.clientID().toString().startsWith("server")) {
-//                            System.out.println("SERVER!");
-//                            System.out.println(amoCommand);
-//                            System.out.println(result.toString());
-//                        } else if (amoCommand.clientID().toString().startsWith("client")) {
-//                            System.out.println("CLIENT!");
-//                            System.out.println(amoCommand);
-//                            System.out.println(result.toString());
-//                        }
-//                    }
                     send(new PaxosReply(result), amoCommand.clientID());
                 } else {
                     handleMessage(new PaxosDecision(amoCommand), shardStoreServer);

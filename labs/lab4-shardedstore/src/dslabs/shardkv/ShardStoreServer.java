@@ -87,7 +87,9 @@ public class ShardStoreServer extends ShardStoreNode {
     // ShardStoreRequest from clients
     private void handleShardStoreRequest(ShardStoreRequest m, Address sender) {
         // Your code here...
-        if (!inReConfig && currShardConfig.configNum() >= INITIAL_CONFIG_NUM) {
+        if (!inReConfig
+                && currShardConfig.configNum() >= INITIAL_CONFIG_NUM
+                && currShardConfig.configNum() == m.configNum()) {
             process(m.command(), false);
         }
 

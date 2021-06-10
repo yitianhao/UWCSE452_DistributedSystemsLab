@@ -90,20 +90,24 @@ public class ShardStoreServer extends ShardStoreNode {
         if (!inReConfig && currShardConfig.configNum() >= INITIAL_CONFIG_NUM) {
             process(m.command(), false);
         }
+
+//        if(currShardConfig.configNum() == 2) {
+//            System.out.println(groupId + "received " + m);
+//        }
     }
 
     // Your code here...
     // TODO
     // Receive PaxosReply from the ShardMaster, informing about the new configs
     private void handlePaxosReply(PaxosReply m, Address sender) {
-        if (groupId == 2 && m.result().result() instanceof ShardConfig && ((ShardConfig) m.result().result()).configNum() == 2) {
-            System.out.println((ShardConfig) m.result().result());
-            System.out.println(inReConfig);
-        }
+//        if (groupId == 1 && m.result().result() instanceof ShardConfig && ((ShardConfig) m.result().result()).configNum() == 2) {
+//            System.out.println((ShardConfig) m.result().result());
+//            System.out.println(inReConfig);
+//        }
         if (m.result().result() instanceof ShardConfig
                 && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())
                 && !inReConfig) {
-            //if (groupId == 1) System.out.println((ShardConfig) m.result().result());
+            //if (groupId == 2) System.out.println((ShardConfig) m.result().result());
             inReConfig = true;
             process(new NewConfig((ShardConfig) m.result().result()), false);
         }
@@ -228,7 +232,7 @@ public class ShardStoreServer extends ShardStoreNode {
 
         shardToMove.remove(sma.destGroupId);
 
-        if (shardToMove.isEmpty() && shardsNeeded.isEmpty() && groupId == 2) {
+        if (shardToMove.isEmpty() && shardsNeeded.isEmpty()) {
             inReConfig = false;
 //            if (groupId == 3) {
 //                System.out.println(groupId);
@@ -330,12 +334,20 @@ public class ShardStoreServer extends ShardStoreNode {
     }
 
     private void processAMOCommand(AMOCommand amoCommand, boolean replicated) {
+//        if (currShardConfig.configNum() == 2) {
+//            System.out.println(groupId + " is processing " + amoCommand);
+//            System.out.println(replicated);
+//        }
+
         if (!canServeAMOCommand(amoCommand.command())) return;
 
         if (!replicated) {
             paxosPropose(amoCommand);
             return;
         }
+//        if (currShardConfig.configNum() == 2) {
+//            System.out.println(groupId + " is processing " + amoCommand);
+//        }
         int shardNum = keyToShard(((SingleKeyCommand)amoCommand.command()).key());
         AMOApplication app = shardToApplication.get(shardNum);
         AMOResult result = app.execute(amoCommand);

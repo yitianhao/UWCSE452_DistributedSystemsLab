@@ -118,13 +118,17 @@ public class ShardStoreServer extends ShardStoreNode {
     // TODO
     // Receive PaxosDecision from Paxos sub-nodes
     private void handlePaxosDecision(PaxosDecision m, Address sender) {
-        if (inReConfig) {
-            storedReplicatedCommands.add(m.amoCommand());
+        if (m.amoCommand().command() instanceof ShardMove || m.amoCommand().command() instanceof ShardMoveAck) {
+            process(m.amoCommand().command(), true);
         } else {
-            if (m.amoCommand().command() instanceof SingleKeyCommand) {
-                processAMOCommand(m.amoCommand(), true);
+            if (inReConfig) {
+                storedReplicatedCommands.add(m.amoCommand());
             } else {
-                process(m.amoCommand().command(), true);
+                if (m.amoCommand().command() instanceof SingleKeyCommand) {
+                    processAMOCommand(m.amoCommand(), true);
+                } else {
+                    process(m.amoCommand().command(), true);
+                }
             }
         }
     }

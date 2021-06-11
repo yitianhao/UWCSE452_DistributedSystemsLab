@@ -203,6 +203,7 @@ public final class ShardStorePart1Test extends ShardStoreBaseTest {
         joinGroup(2, numServersPerGroup);
 
         ShardConfig config1 = getConfig();
+        System.out.println(config1);
         Set<Integer> toMove = new HashSet<>();
         toMove.addAll(config1.groupInfo().get(1).getRight().stream().limit(10)
                              .collect(Collectors.toSet()));

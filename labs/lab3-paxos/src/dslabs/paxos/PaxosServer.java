@@ -416,6 +416,7 @@ public class PaxosServer extends Node {
             AMOCommand amoCommand = log.get(i).command;
             if (amoCommand != null) {  // in the case of no-op
                 if (this.application != null) {
+                    //System.out.println(address() + " | " + i);
                     AMOResult result = application.execute(amoCommand);
 //                    if (amoCommand.sequenceNum() >= 0) {
 //                        System.out.println(application);

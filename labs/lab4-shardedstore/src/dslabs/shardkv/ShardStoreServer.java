@@ -87,7 +87,7 @@ public class ShardStoreServer extends ShardStoreNode {
     // ShardStoreRequest from clients
     private void handleShardStoreRequest(ShardStoreRequest m, Address sender) {
         // Your code here...
-        if (!inReConfig && currShardConfig.configNum() >= INITIAL_CONFIG_NUM) {
+        if (!inReConfig && currShardConfig.configNum() >= INITIAL_CONFIG_NUM && currShardConfig.configNum() == m.configNum()) {
             process(m.command(), false);
         }
 
@@ -212,7 +212,7 @@ public class ShardStoreServer extends ShardStoreNode {
 
         if (shardToMove.isEmpty() && shardsNeeded.isEmpty()) {
             inReConfig = false;
-//            if (groupId == 3) {
+//            if (groupId == 2) {
 //                System.out.println(groupId);
 //                System.out.println(currShardConfig);
 //                System.out.println(shardsOwned);
@@ -257,7 +257,7 @@ public class ShardStoreServer extends ShardStoreNode {
         }
 
             // first time
-        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM) {
+        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM && nc.shardConfig.groupInfo().containsKey(groupId)) {
             for (int shardNum : nc.shardConfig.groupInfo().get(groupId).getRight()) {
                 AMOApplication app = new AMOApplication(new KVStore());
                 shardToApplication.put(shardNum, app);

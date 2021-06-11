@@ -9,18 +9,16 @@ import lombok.Data;
 
 @Data
 final class ClientTimer implements Timer {
-    static final int CLIENT_RETRY_MILLIS = 200;
+    static final int CLIENT_RETRY_MILLIS = 80;
 
     // Your code here...
     private final AMOCommand command;
-    private final int groupID;
-    private final int configNum;
 }
 
 // Your code here...
 @Data
 final class QueryTimer implements Timer {
-    static final int QUERY_RETRY_MILLIS = 150;
+    static final int QUERY_RETRY_MILLIS = 100;
 }
 
 @Data

@@ -32,6 +32,8 @@ June 9
 2. [slide p38] Add in AMOApplication: Check if command.readOnly() and use app.executeReadOnly
 3.
 
-TODO:
-1. read-only command like query (otherwise explode)
-2. Storing Heard Requests during a Reconfig
+Questions for OH:
+1. client skip first command
+2. handle client request: difference configNum?? client's > server's server's > client's
+3. test 4
+4. test 5

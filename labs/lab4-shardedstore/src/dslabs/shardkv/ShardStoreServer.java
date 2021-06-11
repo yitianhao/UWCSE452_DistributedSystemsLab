@@ -13,8 +13,10 @@ import dslabs.paxos.PaxosRequest;
 import dslabs.paxos.PaxosServer;
 import dslabs.shardmaster.ShardMaster.Query;
 import dslabs.shardmaster.ShardMaster.ShardConfig;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.Data;
@@ -45,6 +47,7 @@ public class ShardStoreServer extends ShardStoreNode {
     private HashSet<Integer> shardsOwned = new HashSet<>();
     private HashSet<Integer> shardsNeeded = new HashSet<>();
     private HashMap<Integer, HashSet<Integer>> shardToMove = new HashMap<>();
+    private List<AMOCommand> storedReplicatedCommands = new ArrayList<>();
 
     /* -------------------------------------------------------------------------
         Construction and initialization
@@ -87,9 +90,7 @@ public class ShardStoreServer extends ShardStoreNode {
     // ShardStoreRequest from clients
     private void handleShardStoreRequest(ShardStoreRequest m, Address sender) {
         // Your code here...
-        if (!inReConfig
-                && currShardConfig.configNum() >= INITIAL_CONFIG_NUM
-                && currShardConfig.configNum() == m.configNum()) {
+        if (!inReConfig && currShardConfig.configNum() >= INITIAL_CONFIG_NUM && currShardConfig.configNum() == m.configNum()) {
             process(m.command(), false);
         }
 
@@ -110,7 +111,6 @@ public class ShardStoreServer extends ShardStoreNode {
                 && (((ShardConfig) m.result().result()).configNum() > currShardConfig.configNum())
                 && !inReConfig) {
             //if (groupId == 2) System.out.println((ShardConfig) m.result().result());
-            inReConfig = true;
             process(new NewConfig((ShardConfig) m.result().result()), false);
         }
     }
@@ -118,10 +118,18 @@ public class ShardStoreServer extends ShardStoreNode {
     // TODO
     // Receive PaxosDecision from Paxos sub-nodes
     private void handlePaxosDecision(PaxosDecision m, Address sender) {
-        if (m.amoCommand().sequenceNum() >= 0) {
-            processAMOCommand(m.amoCommand(), true);
-        } else {
+        if (m.amoCommand().command() instanceof ShardMove || m.amoCommand().command() instanceof ShardMoveAck) {
             process(m.amoCommand().command(), true);
+        } else {
+            if (inReConfig) {
+                storedReplicatedCommands.add(m.amoCommand());
+            } else {
+                if (m.amoCommand().command() instanceof SingleKeyCommand) {
+                    processAMOCommand(m.amoCommand(), true);
+                } else {
+                    process(m.amoCommand().command(), true);
+                }
+            }
         }
     }
 
@@ -214,7 +222,8 @@ public class ShardStoreServer extends ShardStoreNode {
 
         if (shardToMove.isEmpty() && shardsNeeded.isEmpty()) {
             inReConfig = false;
-//            if (groupId == 3) {
+            executeStored();
+//            if (groupId == 2) {
 //                System.out.println(groupId);
 //                System.out.println(currShardConfig);
 //                System.out.println(shardsOwned);
@@ -236,6 +245,7 @@ public class ShardStoreServer extends ShardStoreNode {
 
         if (shardToMove.isEmpty() && shardsNeeded.isEmpty()) {
             inReConfig = false;
+            executeStored();
 //            if (groupId == 3) {
 //                System.out.println(groupId);
 //                System.out.println(currShardConfig);
@@ -252,20 +262,24 @@ public class ShardStoreServer extends ShardStoreNode {
             return;
         }
 
+        inReConfig = true;
+
         if (!nc.shardConfig.groupInfo().containsKey(groupId) && !currShardConfig.groupInfo().containsKey(groupId)) {
             currShardConfig = nc.shardConfig;
             inReConfig = false;
+            executeStored();
             return;
         }
 
             // first time
-        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM) {
+        if (nc.shardConfig.configNum() == INITIAL_CONFIG_NUM && nc.shardConfig.groupInfo().containsKey(groupId)) {
             for (int shardNum : nc.shardConfig.groupInfo().get(groupId).getRight()) {
                 AMOApplication app = new AMOApplication(new KVStore());
                 shardToApplication.put(shardNum, app);
                 shardsOwned.add(shardNum);
             }
             inReConfig = false;
+            executeStored();
         } else {
             processNewConfigHelper(nc);
 //            if (groupId==1 && nc.shardConfig().configNum() == 3) {
@@ -363,6 +377,17 @@ public class ShardStoreServer extends ShardStoreNode {
                 && currShardConfig.groupInfo().get(groupId).getRight().contains(keyToShard(((SingleKeyCommand) command).key()))
                 && shardToApplication.containsKey(keyToShard(((SingleKeyCommand)command).key()));
     }
+
+    private void executeStored() {
+        for (AMOCommand amoCommand : storedReplicatedCommands) {
+            if (amoCommand.command() instanceof SingleKeyCommand) {
+                processAMOCommand(amoCommand, true);
+            } else {
+                process(amoCommand.command(), true);
+            }
+        }
+    }
+
 
     @Data
     final class ShardMove implements Command {
